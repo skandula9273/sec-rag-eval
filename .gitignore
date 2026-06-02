@@ -1,0 +1,28 @@
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# Data — FinanceBench PDFs are CC-BY-NC-4.0, not redistributed in this repo.
+# Pull them with `make data` (see README). Eval inputs/derived artifacts stay local.
+data/
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.conda/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Lockfiles are committed (reproducibility) — do NOT ignore uv.lock / requirements.lock
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

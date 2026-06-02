@@ -1,0 +1,54 @@
+[project]
+name = "sec-filings-rag"
+version = "0.0.0"
+description = "Retrieval-augmented QA over SEC filings with a measurement harness for retrieval, faithfulness, latency, and cost."
+requires-python = ">=3.11"
+readme = "README.md"
+
+# Lower bounds are the reproducibility floor; exact pins live in the lockfile
+# (uv.lock or requirements.lock from `pip freeze`). Generate the lock after the
+# first install and commit it — see README "Reproducibility".
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.6",
+    "pydantic-settings>=2.2",
+    "pyyaml>=6.0",
+    "psycopg[binary]>=3.1",
+    "pgvector>=0.2.5",
+    "openai>=1.30",
+    "anthropic>=0.34",
+    "tiktoken>=0.7",
+    "pypdf>=4.2",
+    "datasets>=2.19",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+demo = ["streamlit>=1.34"]
+# V1+ judge layer. Not on the V0 critical path (V0 ships recall@5 only).
+eval-judge = ["ragas>=0.1.7"]
+# V2 observability. Stubbed in V0, not wired.
+obs = ["opentelemetry-sdk>=1.25", "opentelemetry-exporter-otlp>=1.25", "langfuse>=2.36"]
+dev = ["pytest>=8.2", "ruff>=0.4", "pytest-cov>=5.0"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sec_rag"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

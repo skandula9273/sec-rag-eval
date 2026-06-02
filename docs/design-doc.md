@@ -1,0 +1,243 @@
+# Flagship — SEC Filings RAG + Eval Platform
+
+**Author:** Sai (Santosh Kandula)
+**Date:** May 21, 2026
+**Status:** Design doc v1.0 — locked May 21, 2026. Scope, eval, and visual surface all closed. Build starting.
+
+---
+
+## Project
+
+A retrieval-augmented question-answering service over US public-company SEC filings (10-K, 10-Q, 8-K) and market news, plus a measurement system that benchmarks retrieval, faithfulness, latency, and cost across a suite of design ablations.
+
+## Problem
+
+Off-the-shelf LLMs cannot answer questions about specific company filings, because (a) they lack the source documents in context and (b) generating answers without retrieval produces unverifiable claims. Existing RAG demos in the financial domain typically ship one pipeline and call it done. They do not measure which design choices — chunking strategy, embedding model, retrieval method, reranker, time-decay scoring, table extraction — actually improve which metric, and at what cost.
+
+This project closes that gap: a working financial RAG service plus the ablation infrastructure that proves which design decisions move which numbers, scored against a public benchmark.
+
+## Success criteria
+
+| Metric | V0 floor | V2 target | Source |
+|---|---|---|---|
+| Recall@5 (FinanceBench) | 0.55 | 0.75 | FinanceBench 150 |
+| RAGAS faithfulness | 0.65 | 0.80 | FinanceBench + 100 hand-built |
+| p95 end-to-end latency | < 5000 ms | < 2500 ms | Production traces |
+| Cost per query | < $0.01 | < $0.005 | Token + API usage logs |
+
+The point isn't the absolute numbers — it's measurable improvement across ablations with the design choices documented.
+
+## Architecture
+
+```
+INGESTION (cron, daily)
+  EDGAR EFTS API ─► filing fetcher ─► HTML/XBRL parser ─┐
+                                      (Items + tables)  │
+  Finnhub news ─► news fetcher ─► article cleaner ──────┤
+                                                        ▼
+                                            ┌─────────────────────┐
+                                            │  chunker             │
+                                            │  (section-aware,     │
+                                            │   512 tokens)        │
+                                            └──────────┬──────────┘
+                                                       ▼
+                                            ┌─────────────────────┐
+                                            │  embedder            │
+                                            │  (text-emb-3-small)  │
+                                            └──────────┬──────────┘
+                                                       ▼
+                                            ┌─────────────────────┐
+                                            │  pgvector (Neon)     │
+                                            │  docs+chunks+meta    │
+                                            └─────────────────────┘
+
+QUERY (FastAPI on Cloud Run)
+  user query ─► /query ─► query embedder ─► hybrid retrieval
+                                            (BM25 + dense + metadata
+                                             filters + time-decay)
+                                                       │
+                                                       ▼
+                                            reranker (BGE cross-encoder)
+                                                       │
+                                                       ▼
+                                            top-5 chunks + prompt
+                                                       │
+                                                       ▼
+                                            LLM (Claude Haiku)
+                                                       │
+                                                       ▼
+                                            response + citations
+                                                       │
+                                                       └─► OTel trace ─► Grafana
+                                                       └─► LangFuse trace
+
+EVAL
+  FinanceBench 150 ┐
+                   ├─► run /query ─► log retrieval evidence +
+  Custom 100 ──────┘                  generated answer
+                                                       │
+                                                       ▼
+                                     compute recall@k, MRR, RAGAS faithfulness,
+                                     p95 latency, $/query
+                                                       │
+                                                       ▼
+                                            Grafana dashboards + JSON
+                                            results committed to repo
+```
+
+## Scope
+
+**In scope.** S&P 100 companies. 10-K + 10-Q + 8-K filings, 2019–present. Finnhub company news. Hybrid retrieval (BM25 + dense). Cross-encoder reranking. Three-layer eval (FinanceBench + custom + RAGAS). OpenTelemetry + Grafana + LangFuse observability. GCP Cloud Run deployment.
+
+**Out of scope (V2+ optional).** DEF 14A, Form 4, S-1. Earnings call transcripts. Agentic tool calls (SQL / function calling over structured data). Fine-tuning of embedding or generation models. Multi-turn conversational eval. Non-English documents.
+
+**V0 — May 25 → Jun 14.** FinanceBench corpus only (~360 PDFs from `github.com/patronus-ai/financebench`). Dense retrieval only. `/query` endpoint. Cloud Run deploy. Baseline recall@5 measurement against FinanceBench.
+
+**V1 — Jun 15 → Jul 12.** Expand corpus to S&P 100 via EDGAR + Finnhub news. Hybrid retrieval. Cross-encoder reranker. Full three-layer eval running. Custom 100 queries built and labeled.
+
+**V2 — Jul 13 → Aug 9.** Time-decay scoring. Table extraction ablation (Llama-parse or `unstructured.io`). Embedding model comparison (3-small vs. 3-large vs. Voyage finance-2 vs. open BGE). Observability dashboards. 1-page technical report.
+
+**Polish — Aug 10 → Sep 7.** README + architecture diagram + demo GIF + writeup. Resume bullets locked. Applications submitted.
+
+## Tech stack
+
+| Component | Choice | Reason |
+|---|---|---|
+| Language | Python 3.11 | Standard for this stack |
+| Service | FastAPI | Async, typed, deployable |
+| Vector store | pgvector on Neon free tier | Postgres + HNSW; reads more rigorous than Pinecone on a resume |
+| Embeddings (V0) | text-embedding-3-small | Cheap, fast, defensible |
+| LLM (V0) | Claude Haiku | Cheap, fast, lane-coherent |
+| Reranker | BGE cross-encoder base | Open, self-host, free |
+| Eval | FinanceBench (HF) + custom + RAGAS | Public benchmark + domain queries + LLM judge |
+| Observability | OpenTelemetry → Grafana Cloud free + LangFuse OSS | Free tiers |
+| Deploy | GCP Cloud Run | Free tier, scales to zero |
+| News | Finnhub free tier | Ticker-keyed company news, 60 req/min |
+
+## Eval design
+
+Three layers, all run through the same query interface.
+
+**L1 — FinanceBench public benchmark.** 150 questions, each with `evidence` text + gold `answer` + linked PDF. Recall@5 and recall@10 computed by substring/fuzzy match against evidence text. Faithfulness scored against gold answer. Publishable numbers vs. published baselines.
+
+**L2 — Hand-built custom queries (target n=100).** Categorized for ablation reads:
+- 30 single-doc factual
+- 25 multi-doc reasoning
+- 20 freshness-sensitive (answer depends on most recent filing)
+- 15 table-reasoning (tests table extraction)
+- 10 entity-disambiguation (ticker collisions, name-shared companies)
+
+**L3 — RAGAS (LLM-as-judge).** Faithfulness, answer relevance, context precision, context recall. Manual spot-check of 20 judgments per evaluation run to surface LLM-judge bias; findings disclosed in the writeup.
+
+## User-facing output and demo interface
+
+### API response schema
+
+Every `/query` call returns the same structured shape. The schema is the contract; every visual surface is a rendering of it.
+
+```json
+{
+  "answer": "Apple's three largest stated risk factors in FY2023 were ...",
+  "citations": [
+    {
+      "doc_name": "APPLE_2023_10K",
+      "ticker": "AAPL",
+      "filing_type": "10K",
+      "filing_date": "2023-11-02",
+      "page": 12,
+      "section": "Item 1A. Risk Factors",
+      "excerpt": "...",
+      "retrieval_score": 0.87,
+      "rerank_score": 0.94
+    }
+  ],
+  "metrics": {
+    "faithfulness": 0.84,
+    "latency_ms": 1842,
+    "retrieval_ms": 312,
+    "rerank_ms": 88,
+    "generation_ms": 1442,
+    "faithfulness_ms": 612,
+    "cost_usd": 0.0042,
+    "tokens_in": 4210,
+    "tokens_out": 287
+  },
+  "trace_id": "01HZ4Q...",
+  "model": "claude-haiku-4-5"
+}
+```
+
+**Faithfulness in the response.** Computing RAGAS faithfulness inline adds one judge-LLM call per query (~500–700 ms, ~$0.001). Accepted cost in V0/V1 because the score is shown to the user as eval-discipline signal. V2 may move this to async or cached batch if latency targets tighten.
+
+**Model field.** The `model` field stays in the JSON for traceability and dev-side eval swapping. The user-facing UI does **not** render a model selector — model choice stays a developer/eval-harness concern.
+
+### Demo interface progression
+
+| Phase | Interface | Purpose |
+|---|---|---|
+| V0 | Streamlit demo + `curl` examples in README. No model selector. Faithfulness badge on every answer. | Self-host on Cloud Run, link from resume |
+| V1 | Polished Streamlit with query history, source highlighting, latency + faithfulness badges. Model swap behind a dev flag only. | Recruiter video walkthrough |
+| V2 (optional) | Next.js frontend with query playground. Same model-hidden behavior. | Only if V0/V1 ship clean and there's budget. Not a goal in itself. |
+
+Streamlit at V0/V1 because the project's value is the eval rigor and engineering underneath, not the frontend. A clean Streamlit + a tight README GIF is enough portfolio signal.
+
+### What a user sees (V0)
+
+- Header: project name only. No model selector — the model in use is a developer concern, not a UI affordance.
+- Query input with placeholder: "Ask about a 10-K — e.g., 'What were Apple's biggest risk factors in FY2023?'"
+- Answer card: generated response with inline citation markers `[1]`, `[2]`, etc., and a **RAGAS faithfulness badge** (e.g., "Faithfulness 0.84") rendered alongside the answer. The badge tells anyone hitting the demo that the system grades itself in real time — the eval discipline made visible.
+- Sources panel: 5 retrieved chunks. Chunks **cited** in the answer carry colored citation badges `[1] [2] [3]`. Chunks **retrieved but not cited** carry neutral badges `4` `5` — same shape, different color. This distinction makes the user/recruiter aware of what was in context vs. what the LLM actually drew from, without overclaiming.
+- Metrics row at the bottom: latency (with retrieval / rerank / generation / faithfulness breakdown), cost, tokens in/out, chunks retained after rerank.
+
+### Eval dashboard (separate view, developer-facing)
+
+A Grafana dashboard tracking, per evaluation run:
+- Recall@5 over time
+- RAGAS faithfulness over time
+- p50 / p95 / p99 latency
+- Cost per query
+- Per-category breakdown (factual / multi-doc / freshness / table / entity-disambiguation)
+
+Screenshots from this dashboard go in the technical writeup, not the user demo.
+
+### Repo artifacts shipped alongside the code
+
+- Architecture SVG (this doc's diagram, drawn cleanly).
+- 30-second demo GIF of one query → answer → sources.
+- Eval results JSON, timestamped per run, committed to repo.
+- `make demo` launches Streamlit locally; `make eval` reproduces headline numbers.
+
+## Known failure modes — surface, don't hide
+
+- **Embedding similarity on numbers.** Cosine similarity treats "revenue grew 5%" and "revenue grew 25%" as near-identical. A real failure case is presented in the writeup as a known limitation of dense retrieval over financial text.
+- **Table extraction loss.** Naive HTML/PDF parsing destroys 10-K tables. Tables-on vs. tables-off is an explicit V2 ablation.
+- **LLM-judge bias.** RAGAS faithfulness is itself LLM-judged. Spot-check 20 of its judgments per run; report agreement rate honestly.
+- **FinanceBench license.** CC-BY-NC-4.0. Project is non-commercial portfolio work; license requirements met.
+
+## Reproducibility commitments
+
+- Pinned dependency versions in `pyproject.toml`.
+- Fixed random seeds for any sampling step.
+- Eval results committed to repo as JSON, timestamped per run.
+- Architecture diagram committed as SVG alongside this doc.
+- One-command rerun: `make eval` reproduces the headline numbers from any clean clone.
+
+## Open decisions
+
+None. Scope, eval design, and visual surface all locked May 21, 2026.
+
+Decisions made and closed in v1.0:
+- Universe: S&P 100.
+- Filing types: 10-K, 10-Q, 8-K. 2019–present.
+- Eval primary: FinanceBench (150 rows). Secondary: 100 hand-built. Judge: RAGAS.
+- Stack: pgvector on Neon, text-embedding-3-small, Claude Haiku, BGE cross-encoder reranker, FastAPI on Cloud Run.
+- Observability: OpenTelemetry → Grafana Cloud, LangFuse OSS.
+- Cited vs. retrieved distinction: yes, separate badge styles in the Sources panel.
+- Faithfulness on user-facing output: yes, inline RAGAS score per query.
+- Model selector in UI: no. Model swap is a dev-flag concern only.
+
+Deviations require an explicit design-doc amendment with date and rationale.
+
+---
+
+*Living document. Versioned in repo. Updates noted at top with date and rationale.*
