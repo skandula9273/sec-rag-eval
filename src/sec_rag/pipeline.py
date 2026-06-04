@@ -84,7 +84,7 @@ class QueryEngine:
             generation_ms=generation_ms,
             faithfulness_ms=None,
             cost_usd=gen.cost_usd,
-            cost_is_estimate=True,
+            cost_is_estimate=gen.cost_is_estimate,
             tokens_in=gen.tokens_in,
             tokens_out=gen.tokens_out,
             chunks_retrieved=len(retrieved),

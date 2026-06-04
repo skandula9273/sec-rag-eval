@@ -22,6 +22,7 @@ from pathlib import Path
 
 from sec_rag.config import Config, load_config
 from sec_rag.eval.metrics import evidence_match_rank, hit_rate_at_k, mean_reciprocal_rank
+from sec_rag.generate.answer import PRICING
 from sec_rag.ingest.financebench import Question, load_questions
 from sec_rag.pipeline import QueryEngine
 
@@ -114,7 +115,8 @@ def run(cfg: Config, limit: int | None = None, match_mode: str = "substring") ->
         "cost_usd": {
             "mean_per_query": round(sum(costs) / len(costs), 6) if costs else 0.0,
             "total": round(sum(costs), 6),
-            "is_estimate": True,  # pricing not yet confirmed; see generate/answer.py
+            # Estimate iff the generation model has no confirmed rate in PRICING.
+            "is_estimate": cfg.generation.model not in PRICING,
         },
         "per_category_recall": {
             cat: {f"recall@{k}": round(hit_rate_at_k(rs, k), 4) for k in ks}

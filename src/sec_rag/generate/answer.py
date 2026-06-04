@@ -19,10 +19,11 @@ from dataclasses import dataclass
 from sec_rag.config import GenerationConfig, Secrets
 from sec_rag.retrieve.dense import RetrievedChunk
 
-# USD per token. PLACEHOLDER — confirm against https://www.anthropic.com/pricing
-# and set per the exact model id before reporting cost. Left explicit, not hidden.
+# USD per token (NOT per million). Confirmed 2026-06-04 against Anthropic's
+# pricing page: Claude Haiku 4.5 = $1.00 / 1M input tokens, $5.00 / 1M output
+# tokens -> divide by 1e6 for the per-token rate _cost() multiplies by.
 PRICING: dict[str, dict[str, float]] = {
-    "claude-haiku-4-5": {"input": 0.0, "output": 0.0},
+    "claude-haiku-4-5": {"input": 1.00 / 1_000_000, "output": 5.00 / 1_000_000},
 }
 
 _SYSTEM = (
@@ -42,6 +43,7 @@ class GeneratedAnswer:
     tokens_in: int
     tokens_out: int
     cost_usd: float
+    cost_is_estimate: bool  # True if the model has no confirmed rate in PRICING
     model: str
 
 
@@ -93,5 +95,7 @@ def generate_answer(
         tokens_in=tokens_in,
         tokens_out=tokens_out,
         cost_usd=_cost(cfg.model, tokens_in, tokens_out),
+        # Honest by construction: estimate iff this model has no confirmed rate.
+        cost_is_estimate=cfg.model not in PRICING,
         model=cfg.model,
     )

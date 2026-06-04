@@ -43,7 +43,7 @@ class Metrics(BaseModel):
     generation_ms: int
     faithfulness_ms: int | None = None  # V1+
     cost_usd: float
-    cost_is_estimate: bool = True  # pricing not yet confirmed; see generate/answer.py
+    cost_is_estimate: bool = True  # True unless the model has a confirmed rate in generate/answer.py PRICING
     tokens_in: int
     tokens_out: int
     chunks_retrieved: int
