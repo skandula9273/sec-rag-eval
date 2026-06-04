@@ -33,7 +33,10 @@ class QueryEngine:
         self.cfg = cfg
         self.secrets = secrets or Secrets()
         self.embedder = Embedder(cfg.embedding, self.secrets)
-        self.conn = new_connection(self.secrets)
+        # autocommit: this connection is long-lived and read-only. Without it,
+        # psycopg leaves an open transaction after each query and an idle engine
+        # gets killed by Neon's idle-in-transaction timeout (see db/pool.py).
+        self.conn = new_connection(self.secrets, autocommit=True)
 
     def close(self) -> None:
         self.conn.close()
