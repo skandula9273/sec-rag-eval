@@ -59,7 +59,14 @@ def _extract_evidence(row: dict) -> tuple[list[str], list[int]]:
                 txt = item.get("evidence_text") or item.get("text")
                 if txt:
                     texts.append(txt)
-                pg = item.get("evidence_page_num") or item.get("page_number") or item.get("page")
+                # Pick the first key that is PRESENT (not the first truthy one):
+                # FinanceBench evidence_page_num is 0-based, so page 0 (a cover
+                # page) is a real value an ``or`` chain would silently drop.
+                pg = None
+                for key in ("evidence_page_num", "page_number", "page"):
+                    if item.get(key) is not None:
+                        pg = item[key]
+                        break
                 if isinstance(pg, int):
                     pages.append(pg)
             elif isinstance(item, str):
