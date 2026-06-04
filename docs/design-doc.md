@@ -238,6 +238,34 @@ Decisions made and closed in v1.0:
 
 Deviations require an explicit design-doc amendment with date and rationale.
 
+## Amendments
+
+### 2026-06-03 — Eval primary match mode: fuzzy, not substring (clarification)
+
+The eval-design section says recall@k is computed "by substring/fuzzy match
+against evidence text" without committing to one. First live retrieval over the
+ingested corpus (84 docs, 25,992 chunks) forces the choice. On a seeded
+10-question sample, retrieval found the correct **document** 10/10, but
+evidence-span matching diverged sharply by mode:
+
+- **substring recall@10: 2/10**
+- **fuzzy (token-overlap ≥ 0.5) recall@10: 7/10**
+
+Cause: FinanceBench gold `evidence_text` spans are large multi-line financial
+tables, and pypdf re-extracts that text with different whitespace/ordering than
+the dataset's own extraction. An exact contiguous substring of one 512-token
+chunk almost never survives, so substring **understates** recall — it measures
+text-extraction agreement, not retrieval quality.
+
+**Decision:** report **fuzzy(0.5) as the primary recall metric**, with substring
+published alongside as a strict lower bound. This is a measurement-honesty fix
+(rule 2: never cherry-pick numbers), not a scope change — both modes already
+exist in `eval/metrics.py`; this only fixes which one is the headline.
+
+The 3 fuzzy misses were numerical-reasoning questions (computed across table
+cells) — the known dense-retrieval-on-numbers failure mode (rule 5). Reported in
+the eval, not hidden.
+
 ---
 
 *Living document. Versioned in repo. Updates noted at top with date and rationale.*
