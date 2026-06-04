@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import psycopg
+from pgvector import Vector
 
 
 @dataclass
@@ -45,8 +46,13 @@ LIMIT %(k)s
 def dense_search(
     conn: psycopg.Connection, query_vector: list[float], top_k: int
 ) -> list[RetrievedChunk]:
+    # Wrap as pgvector ``Vector`` so psycopg sends it with type ``vector``.
+    # A bare Python list goes over as ``double precision[]``, which the ``<=>``
+    # operator does not accept (the INSERT path works without this only because
+    # the target column type supplies the coercion context; a bare operator has
+    # none). register_vector in db/pool.py installs the dumper this relies on.
     with conn.cursor() as cur:
-        cur.execute(_SQL, {"qvec": query_vector, "k": top_k})
+        cur.execute(_SQL, {"qvec": Vector(query_vector), "k": top_k})
         rows = cur.fetchall()
     return [
         RetrievedChunk(
