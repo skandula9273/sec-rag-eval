@@ -52,10 +52,34 @@ def run(cfg: Config, limit: int | None = None, match_mode: str = "substring") ->
     latencies: list[float] = []
     costs: list[float] = []
     misses_no_evidence = 0
+    errors: list[dict] = []  # questions that failed even after a retry
 
-    with QueryEngine(cfg) as engine:
+    # One failing question (a transient Neon drop, an Anthropic timeout, a rate
+    # limit) must not throw away a 150-question run that is otherwise complete.
+    # Each question gets a bounded retry on a FRESH engine — a dead pooled
+    # connection is the failure we already hit during ingest, and a new engine
+    # reconnects — and anything still failing is recorded and skipped, not fatal.
+    # Failures are counted and disclosed in the report (rule 2: honest numbers).
+    def _ask(engine: QueryEngine, question: str):
+        return engine.run(question, top_k=top_k)
+
+    engine = QueryEngine(cfg)
+    try:
         for q in questions:
-            result = engine.run(q.question, top_k=top_k)
+            try:
+                result = _ask(engine, q.question)
+            except Exception as first_exc:
+                # Rebuild the engine (new DB connection) and try once more.
+                try:
+                    engine.close()
+                except Exception:
+                    pass
+                try:
+                    engine = QueryEngine(cfg)
+                    result = _ask(engine, q.question)
+                except Exception as second_exc:
+                    errors.append({"id": q.id, "error": f"{type(second_exc).__name__}: {second_exc}"})
+                    continue
             contents = [c.excerpt for c in result.response.citations]
             if not q.evidence_texts:
                 misses_no_evidence += 1
@@ -64,10 +88,13 @@ def run(cfg: Config, limit: int | None = None, match_mode: str = "substring") ->
             by_cat[q.question_type or "uncategorized"].append(rank)
             latencies.append(result.response.metrics.latency_ms)
             costs.append(result.response.metrics.cost_usd)
+    finally:
+        engine.close()
 
     report = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "n_questions": len(questions),
+        "n_questions": len(questions),       # questions attempted
+        "n_scored": len(ranks),              # questions that produced a result
         "match_mode": match_mode,
         "config": {
             "chunking": cfg.chunking.model_dump(),
@@ -94,6 +121,8 @@ def run(cfg: Config, limit: int | None = None, match_mode: str = "substring") ->
             for cat, rs in sorted(by_cat.items())
         },
         "questions_without_evidence": misses_no_evidence,
+        "n_errors": len(errors),
+        "errors": errors,  # ids + messages for any question that failed twice
     }
     return report
 
