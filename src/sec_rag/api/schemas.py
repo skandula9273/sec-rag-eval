@@ -13,7 +13,12 @@ from pydantic import BaseModel, Field
 
 class QueryRequest(BaseModel):
     query: str
-    top_k: int | None = None  # falls back to config retrieval.top_k
+    # Bounded so bad values fail at the contract boundary (422) instead of deep
+    # in the stack: top_k<=0 hit "LIMIT must not be negative" in pgvector and a
+    # silent falsy-zero fallback; an unbounded top_k stuffed thousands of chunks
+    # into the generation prompt (Anthropic 413 RequestTooLargeError). 1..50
+    # comfortably covers recall@5/@10 and any sane ablation. None -> config default.
+    top_k: int | None = Field(default=None, ge=1, le=50)
 
 
 class Citation(BaseModel):
