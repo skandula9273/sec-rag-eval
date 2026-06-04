@@ -10,9 +10,11 @@ attrs==26.1.0
 blinker==1.9.0
 cachetools==7.1.4
 certifi==2026.5.20
+cffi==2.0.0
 charset-normalizer==3.4.7
 click==8.4.1
 coverage==7.14.1
+cryptography==48.0.0
 datasets==4.8.5
 dill==0.4.1
 distro==1.9.0
@@ -54,6 +56,7 @@ protobuf==7.35.0
 psycopg==3.3.4
 psycopg-binary==3.3.4
 pyarrow==24.0.0
+pycparser==3.0
 pydantic==2.13.4
 pydantic-settings==2.14.1
 pydantic_core==2.46.4
@@ -72,6 +75,7 @@ requests==2.34.2
 rich==15.0.0
 rpds-py==2026.5.1
 ruff==0.15.15
+-e git+https://github.com/skandula9273/sec-rag-eval.git@d45517c9af9aee273d92d0ad3122b8eacb73df72#egg=sec_filings_rag
 shellingham==1.5.4
 six==1.17.0
 smmap==5.0.3
