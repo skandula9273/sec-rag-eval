@@ -12,9 +12,12 @@ import time
 import uuid
 from dataclasses import dataclass
 
+import psycopg
+
 from sec_rag.config import Config, Secrets
 from sec_rag.db.pool import new_connection
 from sec_rag.generate.answer import generate_answer
+from sec_rag.generate.faithfulness import score_faithfulness
 from sec_rag.ingest.embed import Embedder
 from sec_rag.retrieve.dense import RetrievedChunk, dense_search
 from sec_rag.api.schemas import Citation, Metrics, QueryResponse
@@ -47,18 +50,48 @@ class QueryEngine:
     def __exit__(self, *exc) -> None:
         self.close()
 
+    def _retrieve(self, qvec: list[float], k: int) -> list[RetrievedChunk]:
+        """Dense search with one reconnect on a dead connection.
+
+        The engine holds one long-lived connection. autocommit (see __init__)
+        stops idle-in-transaction kills, but a hard network drop or a
+        server-side recycle can still leave a dead socket — every later query
+        would then 500. Detect the broken connection, rebuild it once, and
+        retry. Read-only, so the retry is safe.
+        """
+        try:
+            return dense_search(self.conn, qvec, k)
+        except psycopg.OperationalError:
+            try:
+                self.conn.close()
+            except Exception:
+                pass
+            self.conn = new_connection(self.secrets, autocommit=True)
+            return dense_search(self.conn, qvec, k)
+
     def run(self, query: str, top_k: int | None = None) -> PipelineResult:
         k = top_k or self.cfg.retrieval.top_k
         trace_id = uuid.uuid4().hex
 
         t0 = time.perf_counter()
         qvec = self.embedder.embed_one(query)
-        retrieved = dense_search(self.conn, qvec, k)
+        retrieved = self._retrieve(qvec, k)
         retrieval_ms = int((time.perf_counter() - t0) * 1000)
 
         t1 = time.perf_counter()
         gen = generate_answer(query, retrieved, self.cfg.generation, self.secrets)
         generation_ms = int((time.perf_counter() - t1) * 1000)
+
+        # Faithfulness badge: one judge call grading how grounded the answer is in
+        # the retrieved sources. Off by default (eval.faithfulness=false) so it
+        # stays off the critical path unless enabled; see generate/faithfulness.py.
+        faithfulness = None
+        faithfulness_ms = None
+        if self.cfg.eval.faithfulness:
+            t2 = time.perf_counter()
+            fr = score_faithfulness(gen.text, retrieved, self.cfg.generation, self.secrets)
+            faithfulness = fr.score
+            faithfulness_ms = int((time.perf_counter() - t2) * 1000)
 
         citations = [
             Citation(
@@ -77,12 +110,12 @@ class QueryEngine:
         ]
 
         metrics = Metrics(
-            faithfulness=None,  # V0: off (eval.faithfulness=false). V1 turns RAGAS on.
-            latency_ms=retrieval_ms + generation_ms,
+            faithfulness=faithfulness,  # None unless eval.faithfulness enabled
+            latency_ms=retrieval_ms + generation_ms + (faithfulness_ms or 0),
             retrieval_ms=retrieval_ms,
             rerank_ms=None,
             generation_ms=generation_ms,
-            faithfulness_ms=None,
+            faithfulness_ms=faithfulness_ms,
             cost_usd=gen.cost_usd,
             cost_is_estimate=gen.cost_is_estimate,
             tokens_in=gen.tokens_in,

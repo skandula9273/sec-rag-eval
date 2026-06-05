@@ -36,6 +36,9 @@ eval:
   dataset: PatronusAI/financebench
   recall_ks: [5, 10]
   seed: 13                  # any sampling step uses this
-  # RAGAS faithfulness is V1+. Off by default in V0 so the critical path is
-  # just recall@k. Flip on once recall baseline is committed.
-  faithfulness: false
+  # Faithfulness badge: lightweight Haiku judge (NOT ragas — ragas is built for
+  # LangChain 0.x and won't import under current LangChain 1.x; see the
+  # 2026-06-04 design-doc amendment). One judge call per query grades how
+  # grounded the answer is in the retrieved sources. Adds ~one Haiku call to
+  # the path; set false to drop it back off the critical path.
+  faithfulness: true
