@@ -16,6 +16,7 @@ import argparse
 import json
 import math
 import random
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,7 +44,12 @@ def _select(questions: list[Question], limit: int | None, seed: int) -> list[Que
     return rng.sample(questions, limit)
 
 
-def run(cfg: Config, limit: int | None = None, match_mode: str = "substring") -> dict:
+def run(
+    cfg: Config,
+    limit: int | None = None,
+    match_mode: str = "substring",
+    sleep_s: float = 0.0,
+) -> dict:
     ks = sorted(cfg.eval.recall_ks)
     top_k = max(ks)
     questions = _select(load_questions(cfg.eval.dataset), limit, cfg.eval.seed)
@@ -65,9 +71,15 @@ def run(cfg: Config, limit: int | None = None, match_mode: str = "substring") ->
     def _ask(engine: QueryEngine, question: str):
         return engine.run(question, top_k=top_k)
 
+    # With faithfulness on, each question makes two Anthropic calls (answer +
+    # judge); 150 questions back-to-back can saturate a low account rate limit.
+    # sleep_s spaces them out — set it (e.g. --sleep 1.0) when a full run trips
+    # the per-minute limit. 0.0 = no pause (the default; fine for small runs).
     engine = QueryEngine(cfg)
     try:
-        for q in questions:
+        for i, q in enumerate(questions):
+            if sleep_s and i > 0:
+                time.sleep(sleep_s)
             try:
                 result = _ask(engine, q.question)
             except Exception as first_exc:
@@ -145,10 +157,16 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=None, help="sample N questions (seeded)")
     ap.add_argument("--match-mode", choices=["substring", "fuzzy"], default="substring")
     ap.add_argument("--out-dir", default="eval_results")
+    ap.add_argument(
+        "--sleep",
+        type=float,
+        default=0.0,
+        help="seconds to pause between questions (throttle to stay under API rate limits)",
+    )
     args = ap.parse_args()
 
     cfg = load_config(args.config)
-    report = run(cfg, limit=args.limit, match_mode=args.match_mode)
+    report = run(cfg, limit=args.limit, match_mode=args.match_mode, sleep_s=args.sleep)
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
