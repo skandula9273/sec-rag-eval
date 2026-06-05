@@ -23,6 +23,10 @@ import httpx
 import streamlit as st
 
 API_URL = os.environ.get("SEC_RAG_API_URL", "http://localhost:8000")
+# When the API is guarded (SEC_RAG_API_KEY set on it), the demo sends the same
+# key as an X-API-Key header. Unset for local/unguarded dev.
+API_KEY = os.environ.get("SEC_RAG_API_KEY")
+_HEADERS = {"X-API-Key": API_KEY} if API_KEY else {}
 
 st.set_page_config(page_title="sec-filings-rag", layout="wide")
 st.title("SEC filings RAG")
@@ -34,7 +38,9 @@ query = st.text_input(
 
 if st.button("Ask", type="primary") and query.strip():
     try:
-        resp = httpx.post(f"{API_URL}/query", json={"query": query}, timeout=60.0)
+        resp = httpx.post(
+            f"{API_URL}/query", json={"query": query}, headers=_HEADERS, timeout=60.0
+        )
         resp.raise_for_status()
         data = resp.json()
     except Exception as exc:  # demo: show the failure plainly

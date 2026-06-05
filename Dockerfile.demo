@@ -1,0 +1,27 @@
+# Streamlit demo image (Cloud Run). Talks to the deployed API over HTTP.
+#
+# Build:  docker build -f Dockerfile.demo -t sec-rag-demo .
+# Env at deploy time:
+#   SEC_RAG_API_URL  -> the deployed API's https URL
+#   SEC_RAG_API_KEY  -> same shared key the API expects (sent as X-API-Key)
+# The demo holds NO model/DB secrets — it only calls the API.
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# The demo only needs streamlit + httpx, not the server/DB/model stack.
+RUN pip install --no-cache-dir "streamlit>=1.34" "httpx>=0.27"
+
+COPY demo ./demo
+
+EXPOSE 8080
+# Cloud Run sets $PORT; Streamlit must bind it and run headless.
+CMD exec streamlit run demo/streamlit_app.py \
+    --server.port ${PORT:-8080} \
+    --server.address 0.0.0.0 \
+    --server.headless true

@@ -1,0 +1,23 @@
+# Never ship secrets, data, or local cruft into the image.
+.env
+.env.*
+!.env.example
+data/
+eval_results/
+docs/
+tests/
+.git/
+.venv/
+venv/
+.conda/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.heic
+*.png
+.DS_Store
+.idea/
+.vscode/
