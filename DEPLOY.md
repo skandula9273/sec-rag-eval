@@ -49,12 +49,18 @@ gcloud run deploy sec-rag-api \
 ```
 
 Notes:
-- `--source .` uses `Dockerfile` automatically.
+- `--source .` uses `Dockerfile` (the API) automatically and builds it with
+  Cloud Build — which produces an **amd64** image, exactly what Cloud Run needs.
+- First `--source` deploy will try to create an Artifact Registry repo and
+  **prompt interactively**. If you run it non-interactively, pre-create the repo
+  to avoid a hang:
+  `gcloud artifacts repositories create cloud-run-source-deploy
+  --repository-format=docker --location=us-east1`. `--quiet` also auto-confirms.
+- Passing secrets: `--env-vars-file env.yaml` (a small YAML of KEY: value) keeps
+  them out of shell history; `--set-env-vars "K=v,..."` works too.
 - `--allow-unauthenticated` makes the URL reachable; the `SEC_RAG_API_KEY` guard
   is what actually protects `/query` from draining your model keys.
 - `--memory 1Gi` because pgvector + the SDKs need headroom; 512Mi can OOM.
-- Quote the whole `--set-env-vars` value; commas separate vars, so a value
-  containing a comma needs the `^@^`-delimiter form (DB URLs usually don't).
 
 Grab the URL it prints, e.g. `https://sec-rag-api-xxxx.us-east1.run.app`.
 
@@ -69,16 +75,31 @@ curl -X POST https://sec-rag-api-xxxx.us-east1.run.app/query \
 
 ## 3. Deploy the demo
 
+`gcloud run deploy --source` only builds the default `Dockerfile` — there is no
+flag to point it at `Dockerfile.demo`. So build the demo image yourself and
+deploy from it. **Build for `linux/amd64`**: Cloud Run rejects arm64 images, so
+on an Apple Silicon Mac you must cross-build with `buildx` (a plain
+`docker build` produces arm64 and the deploy fails with
+"must support amd64/linux").
+
 ```bash
+REPO=us-east1-docker.pkg.dev/<PROJECT_ID>/cloud-run-source-deploy
+gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
+
+# Cross-build for amd64 and push in one step.
+docker buildx build --platform linux/amd64 -f Dockerfile.demo \
+  -t "$REPO/sec-rag-demo:latest" --push .
+
 gcloud run deploy sec-rag-demo \
-  --source . \
-  --dockerfile Dockerfile.demo \
+  --image "$REPO/sec-rag-demo:latest" \
+  --region us-east1 \
   --allow-unauthenticated \
   --memory 512Mi \
   --set-env-vars "SEC_RAG_API_URL=https://sec-rag-api-xxxx.us-east1.run.app,SEC_RAG_API_KEY=<the key from step 1>"
 ```
 
-Open the demo URL it prints — that is the link to share.
+Open the demo URL it prints — that is the link to share. The demo holds no model
+or DB secrets; it only forwards queries to the API with the shared key.
 
 ## Costs & behaviour
 

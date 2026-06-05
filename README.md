@@ -8,12 +8,22 @@ The point of the project is not one pipeline. It is showing which design choices
 (chunking, embedding model, retrieval method, reranking) move which metric, and at
 what cost, measured against a public benchmark (FinanceBench).
 
+## Live demo
+
+- **Demo:** https://sec-rag-demo-cpsb7kmoqa-ue.a.run.app
+- **API:** https://sec-rag-api-cpsb7kmoqa-ue.a.run.app (`/query` guarded by an
+  `X-API-Key`; `/health` and `/docs` open)
+
+Both run on Cloud Run (scale-to-zero — first request after idle has a ~15 s cold
+start). Deploy steps: [`DEPLOY.md`](DEPLOY.md).
+
 ## Status
 
-**V0 baseline measured.** The full pipeline runs end-to-end: 84 FinanceBench
-documents ingested (25,992 chunks in pgvector), dense retrieval, Claude Haiku
-generation with citations, an inline faithfulness judge, and a FastAPI `/query`
-service with a Streamlit demo. Results below are reproducible via `make eval`.
+**V0 baseline measured and deployed.** The full pipeline runs end-to-end: 84
+FinanceBench documents ingested (25,992 chunks in pgvector), dense retrieval,
+Claude Haiku generation with citations, an inline faithfulness judge, and a
+FastAPI `/query` service with a Streamlit demo, both live on Cloud Run. Results
+below are reproducible via `make eval`.
 
 V0 is dense retrieval only — hybrid retrieval and reranking are V1/V2 and are not
 in this tree yet, by design. The honest below-floor recall is exactly what those
