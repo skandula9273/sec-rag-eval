@@ -52,6 +52,7 @@ def run(cfg: Config, limit: int | None = None, match_mode: str = "substring") ->
     by_cat: dict[str, list[int | None]] = defaultdict(list)
     latencies: list[float] = []
     costs: list[float] = []
+    faithfulness_scores: list[float] = []  # populated only when eval.faithfulness on
     misses_no_evidence = 0
     errors: list[dict] = []  # questions that failed even after a retry
 
@@ -89,6 +90,8 @@ def run(cfg: Config, limit: int | None = None, match_mode: str = "substring") ->
             by_cat[q.question_type or "uncategorized"].append(rank)
             latencies.append(result.response.metrics.latency_ms)
             costs.append(result.response.metrics.cost_usd)
+            if result.response.metrics.faithfulness is not None:
+                faithfulness_scores.append(result.response.metrics.faithfulness)
     finally:
         engine.close()
 
@@ -121,6 +124,13 @@ def run(cfg: Config, limit: int | None = None, match_mode: str = "substring") ->
         "per_category_recall": {
             cat: {f"recall@{k}": round(hit_rate_at_k(rs, k), 4) for k in ks}
             for cat, rs in sorted(by_cat.items())
+        },
+        # Mean faithfulness across scored questions (null if eval.faithfulness off).
+        "faithfulness": {
+            "enabled": cfg.eval.faithfulness,
+            "mean": round(sum(faithfulness_scores) / len(faithfulness_scores), 4)
+            if faithfulness_scores else None,
+            "n_scored": len(faithfulness_scores),
         },
         "questions_without_evidence": misses_no_evidence,
         "n_errors": len(errors),
