@@ -266,6 +266,52 @@ The 3 fuzzy misses were numerical-reasoning questions (computed across table
 cells) — the known dense-retrieval-on-numbers failure mode (rule 5). Reported in
 the eval, not hidden.
 
+### 2026-06-04 — Haiku pricing confirmed; cost no longer an estimate
+
+The `PRICING` placeholder (`0.0`, `cost_is_estimate: true`) is resolved.
+Confirmed against Anthropic's pricing page: **Claude Haiku 4.5 = $1.00 / 1M
+input tokens, $5.00 / 1M output tokens**. Set as the per-token rate in
+`generate/answer.py`. `cost_is_estimate` is now *derived* (`model not in
+PRICING`) rather than hardcoded, so a priced model reports `false` and any
+future unpriced model auto-flags `true`. Measured V0 cost: **$0.0063/query**
+(under the <$0.01 floor).
+
+### 2026-06-04 — Faithfulness badge: lightweight judge, not RAGAS (deviation)
+
+The locked design names **RAGAS** for faithfulness. RAGAS is not viable in the
+current environment: `ragas` is built for LangChain 0.x and does not import
+under LangChain 1.x (the June 2026 ecosystem) — it imports module paths
+(`ChatVertexAI`) that no longer exist, and pinning LangChain back to 0.x breaks
+`langchain-openai`/`langgraph` and risks the `openai`/`anthropic` deps the
+pipeline relies on. A working RAGAS would require a fragile, conflict-ridden
+dependency tower, violating the reproducibility rule (rule 4).
+
+**Decision:** implement faithfulness with a **self-contained Haiku judge**
+(`generate/faithfulness.py`) using RAGAS's *definition* — the fraction of the
+answer's claims supported by the retrieved sources — via one judge call
+(temperature 0). Same user-facing badge and committed metric, zero added
+dependencies, reproducible. A grounded refusal scores 1.0 (asserts nothing
+unsupported). Verified discriminating: grounded claim → 1.0, hallucinated
+answer → 0.0. Measured V0 mean faithfulness: **0.941** (above the 0.65 floor).
+
+The V0 faithfulness badge is now **on** (`eval.faithfulness: true`), resolving
+the open item from the 2026-05-29 session summary in favour of option A (wire it
+in V0) — by a different mechanism than the doc named, for the reason above.
+
+### 2026-06-04 — Known V0 limitations (on record, not bugs)
+
+Surfaced during stress-testing; documented rather than over-engineered in V0:
+
+- **Single shared DB connection serializes concurrent queries.** Safe (psycopg
+  locks; verified 6/6 concurrent), but a throughput ceiling. A connection pool
+  is the V1 scaling fix. The engine now reconnects once on a dropped connection.
+- **Retrieval score is `1 - cosine_distance`**, theoretically in [-1, 1]. A
+  negative score is possible (didn't occur across the corpus) and would read
+  oddly in the UI. Left honest in V0; clamp-for-display is a V1 option.
+- **Setup footgun:** `requirements.lock` pins the project itself, so
+  `pip install -r requirements.lock` de-edits the editable install. Re-run
+  `pip install -e .` after restoring the lockfile. Noted in the README setup.
+
 ---
 
 *Living document. Versioned in repo. Updates noted at top with date and rationale.*
