@@ -312,6 +312,25 @@ Surfaced during stress-testing; documented rather than over-engineered in V0:
   `pip install -r requirements.lock` de-edits the editable install. Re-run
   `pip install -e .` after restoring the lockfile. Noted in the README setup.
 
+### 2026-06-06 — V1 sequencing: separate measured increments (deviation)
+
+The locked V1 scope (above) bundles corpus expansion (S&P 100 via EDGAR) +
+hybrid retrieval + cross-encoder reranker + 100 custom queries as one phase.
+
+**Amendment:** V1 is executed as separate, individually-measured increments on
+the *same* FinanceBench corpus, in order: (1) hybrid retrieval, (2) reranker,
+(3) corpus expansion, (4) full three-layer eval. **Rationale:** changing the
+corpus and the retrieval method at once makes the recall delta un-attributable —
+more documents add distractors, shifting recall independent of the algorithm.
+Isolating each change against the committed V0 baseline (recall@5 0.44) is what
+rule #6 (ablation-friendly, one variable at a time) requires. Same end state as
+the locked scope; the change is ordering + measurement discipline, not content.
+Detail in `v1-plan.md`.
+
+Also recorded there: `pg_search` (ParadeDB BM25) is **deprecated on Neon** and
+cannot be enabled, so V1 hybrid uses core Postgres FTS (`tsvector` +
+`ts_rank_cd`) for the lexical half. Verified against the live DB.
+
 ---
 
 *Living document. Versioned in repo. Updates noted at top with date and rationale.*
