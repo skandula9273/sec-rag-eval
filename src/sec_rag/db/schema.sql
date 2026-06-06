@@ -40,3 +40,9 @@ CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw
 -- Metadata filters (ticker / filing_type / date) used by retrieval in V1.
 CREATE INDEX IF NOT EXISTS documents_ticker_idx ON documents (ticker);
 CREATE INDEX IF NOT EXISTS documents_filing_idx ON documents (filing_type, filing_date);
+
+-- Full-text (lexical) index for V1 hybrid retrieval. GIN over the english
+-- tsvector of chunk content; matched by ts_rank_cd in retrieve/lexical.py.
+-- (pg_search/BM25 is deprecated on Neon, so hybrid's lexical half uses core FTS.)
+CREATE INDEX IF NOT EXISTS chunks_content_fts
+    ON chunks USING gin (to_tsvector('english', content));

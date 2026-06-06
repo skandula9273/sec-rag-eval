@@ -1,0 +1,37 @@
+# V1 configuration. Identical to v0.yaml EXCEPT retrieval.method = hybrid.
+# This is the ablation: one variable changed (dense -> hybrid) so `make eval
+# CONFIG=configs/v1.yaml` is a clean A/B against the committed V0 baseline
+# (recall@5 0.44). v0.yaml is left untouched so the baseline stays reproducible.
+
+corpus: financebench
+
+chunking:
+  strategy: token
+  max_tokens: 512
+  overlap_tokens: 64
+  encoder: cl100k_base
+
+embedding:
+  provider: openai
+  model: text-embedding-3-small
+  dim: 1536
+  batch_size: 128
+
+retrieval:
+  method: hybrid            # V1: dense + lexical (Postgres FTS), fused by RRF
+  top_k: 5
+  distance: cosine
+  candidates: 20            # depth per retriever before fusion
+  k_rrf: 60                 # RRF damping constant
+
+generation:
+  provider: anthropic
+  model: claude-haiku-4-5
+  max_tokens: 1024
+  temperature: 0.0
+
+eval:
+  dataset: PatronusAI/financebench
+  recall_ks: [5, 10]
+  seed: 13
+  faithfulness: true

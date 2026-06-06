@@ -20,6 +20,7 @@ from sec_rag.generate.answer import generate_answer
 from sec_rag.generate.faithfulness import score_faithfulness
 from sec_rag.ingest.embed import Embedder
 from sec_rag.retrieve.dense import RetrievedChunk, dense_search
+from sec_rag.retrieve.hybrid import hybrid_search
 from sec_rag.api.schemas import Citation, Metrics, QueryResponse
 
 
@@ -50,8 +51,20 @@ class QueryEngine:
     def __exit__(self, *exc) -> None:
         self.close()
 
-    def _retrieve(self, qvec: list[float], k: int) -> list[RetrievedChunk]:
-        """Dense search with one reconnect on a dead connection.
+    def _search(self, query: str, qvec: list[float], k: int) -> list[RetrievedChunk]:
+        """Run the configured retriever: dense (V0) or hybrid (V1)."""
+        r = self.cfg.retrieval
+        if r.method == "hybrid":
+            return hybrid_search(
+                self.conn, qvec, query, k,
+                candidates=r.candidates, k_rrf=r.k_rrf,
+            )
+        if r.method == "dense":
+            return dense_search(self.conn, qvec, k)
+        raise ValueError(f"unknown retrieval.method: {r.method!r}")
+
+    def _retrieve(self, query: str, qvec: list[float], k: int) -> list[RetrievedChunk]:
+        """Retrieve with one reconnect on a dead connection.
 
         The engine holds one long-lived connection. autocommit (see __init__)
         stops idle-in-transaction kills, but a hard network drop or a
@@ -60,14 +73,14 @@ class QueryEngine:
         retry. Read-only, so the retry is safe.
         """
         try:
-            return dense_search(self.conn, qvec, k)
+            return self._search(query, qvec, k)
         except psycopg.OperationalError:
             try:
                 self.conn.close()
             except Exception:
                 pass
             self.conn = new_connection(self.secrets, autocommit=True)
-            return dense_search(self.conn, qvec, k)
+            return self._search(query, qvec, k)
 
     def run(self, query: str, top_k: int | None = None) -> PipelineResult:
         k = top_k or self.cfg.retrieval.top_k
@@ -75,7 +88,7 @@ class QueryEngine:
 
         t0 = time.perf_counter()
         qvec = self.embedder.embed_one(query)
-        retrieved = self._retrieve(qvec, k)
+        retrieved = self._retrieve(query, qvec, k)
         retrieval_ms = int((time.perf_counter() - t0) * 1000)
 
         t1 = time.perf_counter()
