@@ -51,6 +51,44 @@ financial tables is the known weak spot, and the V1 hybrid+reranker target.
 Faithfulness 0.94 shows the answers that *are* given stay grounded (the system
 refuses rather than hallucinating when retrieval misses).
 
+## Architecture
+
+The API and the eval harness call the **same** `QueryEngine.run()` — the numbers
+reported are produced by the exact path a user hits, so eval can't drift from
+production.
+
+```mermaid
+flowchart LR
+    subgraph INGEST["Ingest (offline, make ingest)"]
+        PDF[FinanceBench PDFs] --> PA[parse.py<br/>pypdf, page by page]
+        PA --> CH[chunk.py<br/>512-tok windows / 64 overlap]
+        CH --> EM[embed.py<br/>text-embedding-3-small]
+        EM --> LD[load.py<br/>idempotent upsert]
+    end
+    LD --> DB[("Neon Postgres + pgvector<br/>documents + chunks<br/>vector#40;1536#41;, HNSW cosine")]
+
+    subgraph QUERY["Query (FastAPI /query)"]
+        Q[question] --> QE[embed query]
+        QE --> DS[dense.py<br/>cosine top-k]
+        DS --> GEN[answer.py<br/>Claude Haiku, grounded, #91;n#93; cites]
+        GEN --> FJ[faithfulness.py<br/>Haiku judge, 0-1]
+        FJ --> RESP[QueryResponse<br/>answer + citations + metrics]
+    end
+    DB --> DS
+
+    subgraph EVAL["Eval (make eval)"]
+        FB[FinanceBench 150 Qs] --> RUN[run through QueryEngine]
+        RUN --> SC["recall@k · MRR · faithfulness · cost"]
+        SC --> JSON[timestamped JSON in eval_results/]
+    end
+    QE -. same engine .-> RUN
+```
+
+**Per query:** embed (OpenAI, 1536-d) → cosine top-k from pgvector (HNSW) →
+grounded Haiku answer with parsed `[n]` citations → Haiku faithfulness judge →
+structured `QueryResponse`. A `SEC_RAG_API_KEY` header guards `/query` in
+production; secrets are env-only, never in the image.
+
 ## Layout
 
 ```
