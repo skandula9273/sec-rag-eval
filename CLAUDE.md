@@ -12,10 +12,11 @@ underneath**, not the chatbot. Numbers must be reproducible and honest.
 Owner: Sai (Santosh Kandula). Audience for the work: engineering leads who will
 read the code and scrutinize the numbers. Treat every output that way.
 
-## Where we are now (read before planning) — updated 2026-06-11
+## Where we are now (read before planning) — updated 2026-06-26
 
-- Phase: **V1.1** (hybrid retrieval). **V0 is complete and deployed** — landed
-  ahead of the June 14 deadline.
+- Phase: **V1.1 complete — hybrid tested and retired; the next lever is table
+  extraction.** **V0 is complete and deployed** — landed ahead of the June 14
+  deadline.
 - **Live services are wired.** Neon Postgres + pgvector is up (`vector` extension
   enabled); OpenAI + Anthropic keys work; the FinanceBench corpus is **ingested:
   84 documents, 25,992 chunks**. The API + Streamlit demo are deployed on Cloud
@@ -43,15 +44,27 @@ read the code and scrutinize the numbers. Treat every output that way.
 - Authoritative current state: this section + `docs/v1-plan.md`. The dated
   session summaries (`docs/session-summary-2026-05-*.md`) are historical.
 
-### V1.1 status — hybrid code landed, A/B NOT yet valid
+### V1.1 status — hybrid tested and RETIRED (dense is the ceiling)
 
-`retrieve/hybrid.py` + `retrieve/lexical.py` (dense + Postgres FTS, RRF fusion)
-are written, tested for the pure-logic fusion, and committed (`configs/v1.yaml`,
-`retrieval.method: hybrid`). **But the clean A/B vs the 0.44 baseline has not
-validly completed.** The last hybrid eval (`...20260606T222705Z.json`, untracked)
-aborted: only 73/150 scored, 77 errors all "Anthropic credit balance too low."
-Its recall@5 0.274 is an artifact of a partial, non-random subset — **not a
-result, do not cite it.** Re-run to completion before drawing any conclusion.
+The clean A/B is done — via the retrieval-only eval mode (`--no-generate`, 150 q,
+fuzzy, 0 errors). recall@k / MRR need no Anthropic (only OpenAI embeddings + the
+DB), and dense reproduced the committed 0.44 *exactly*, validating the harness.
+
+**Result:** hybrid (dense + Postgres FTS, RRF) **regressed** — recall@5 0.44 →
+**0.347**, every category down, including tables (0.32 → 0.26). The fusion-weight
+sweep (`eval_results/ablation_fusion_20260615T214346Z.json`) shows **no blend
+beats dense**: lexical-only recall@5 **0.04**, tables@5 **0.00**.
+
+**Conclusion (decided):** pure dense is the recall ceiling on this corpus; hybrid
+is **retired as a recall lever** (dense stays the default; the `dense_weight` knob
+is kept, favouring dense). **The deeper finding:** lexical's 0.00 on tables means
+the exact line-item terms aren't in the chunk text — **pypdf flattened the tables
+at parse time** — so no retriever can surface evidence parsing already destroyed.
+The tables gap is a **parsing problem, not a retrieval-method one** → **table
+extraction** (unstructured.io / llama-parse) is the next real lever, ahead of the
+reranker. Full reasoning + depth-round write-up: `docs/depth-round.md`. Committed
+A/B JSONs: `financebench_20260615T210625Z.json` (dense), `...212005Z.json`
+(hybrid), `ablation_fusion_20260615T214346Z.json` (sweep).
 
 ## Conceptual model
 
@@ -101,13 +114,22 @@ amendments exist already; read the `## Amendments` section before proposing one.
 FinanceBench corpus** (per the 2026-06-06 amendment), to keep one variable
 changing at a time against the committed 0.44 baseline:
 
-- **V1.1 — Hybrid retrieval** (dense + Postgres FTS + RRF). ← *current.* Code
-  done; eval must be re-run to completion and diffed vs 0.44.
-- **V1.2 — Cross-encoder reranker** (BGE base) over hybrid candidates.
+- **V1.1 — Hybrid retrieval** (dense + Postgres FTS + RRF). **DONE — retired.**
+  Tested: no fusion blend beats dense; the tables gap is upstream (parsing). See
+  the V1.1 status above.
+- **V1.2 — Cross-encoder reranker** (BGE base) over the top dense candidates.
+  Still planned, but reframed by the V1.1b finding: a reranker only re-orders what
+  retrieval already surfaced, so it **cannot recover table evidence pypdf
+  destroyed** — expect a prose-side precision (MRR) win, not a tables fix.
 - **V1.3 — Corpus expansion** (S&P 100 via EDGAR + Finnhub news) + 100 hand-built
   labeled custom queries.
 - **V1.4 — Full three-layer eval** (FinanceBench + custom 100 + faithfulness
   judge); per-category ablation table is the deliverable.
+
+**Open resequencing (needs a dated design-doc amendment before acting):** the
+V1.1b ablation is evidence that **table extraction** — parked in V2 below — is the
+real lever on the 0.32 tables gap and should likely come *before* the
+reranker/corpus work. Propose the amendment; do not silently reorder.
 
 **Still out of scope until V2** — do not pull forward without a told-to-do-it:
 time-decay scoring, table-extraction ablation, embedding-model comparison,
