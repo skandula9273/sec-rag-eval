@@ -331,6 +331,49 @@ Also recorded there: `pg_search` (ParadeDB BM25) is **deprecated on Neon** and
 cannot be enabled, so V1 hybrid uses core Postgres FTS (`tsvector` +
 `ts_rank_cd`) for the lexical half. Verified against the live DB.
 
+### 2026-06-26 — Hybrid retired; table extraction promoted ahead of the reranker (deviation)
+
+The 2026-06-06 amendment sequenced V1 as (1) hybrid → (2) reranker → (3) corpus →
+(4) full eval, and the locked scope parks table extraction in V2. The V1.1 result
+forces a change to both.
+
+**Evidence (committed; retrieval-only A/B + fusion-weight sweep, 150 q, fuzzy, 0
+errors):**
+- Hybrid (dense + Postgres FTS, RRF) **regressed**: recall@5 0.44 → 0.347; every
+  category fell, including the metrics-generated (tables) category it targeted
+  (0.32 → 0.26).
+- Fusion-weight sweep: **no blend beats dense.** Lexical-only recall@5 **0.04**,
+  tables@5 **0.00**; recall rises monotonically with dense weight and only *ties*
+  dense at ≈0.95–1.0.
+- Dense reproduced the committed 0.44 baseline exactly in the same harness, so the
+  comparison is sound, not a measurement artifact.
+- JSONs: `eval_results/financebench_20260615T210625Z.json` (dense),
+  `...212005Z.json` (hybrid), `ablation_fusion_20260615T214346Z.json` (sweep).
+
+**Finding:** lexical's **0.00 on tables** shows the exact line-item terms are not
+in the chunk text to match — `pypdf` flattens 10-K tables at parse time. No
+retriever (dense or lexical) can surface evidence that parsing already destroyed.
+The tables gap is a **parsing problem, not a retrieval-method problem.**
+
+**Amendment:**
+1. **Hybrid retrieval is retired as a recall lever.** Dense stays the default; the
+   code + `dense_weight` knob remain (favouring dense) for reproducibility and as a
+   documented negative result, not as the shipping path.
+2. **Table extraction is promoted from V2 to the next V1 increment**, ahead of the
+   cross-encoder reranker. New order: **(1) hybrid — done/retired; (2) table
+   extraction (unstructured.io / llama-parse), measured against the 0.44 baseline;
+   (3) reranker; (4) corpus expansion; (5) full three-layer eval.**
+3. The reranker stays in scope but is **reframed**: it only re-orders candidates
+   retrieval already surfaced, so it cannot recover destroyed table evidence —
+   expect a prose-side precision (MRR) gain, not a tables fix.
+
+**Rationale:** rule #5 (eval on real + edge cases; validate where it breaks) and
+rule #6 (one variable at a time) say to attack the *measured* bottleneck next —
+and the measured bottleneck is upstream parsing, not retrieval fusion or reranking.
+Same V2 end state (table extraction was always in scope); the change is *ordering*
+— pulling it forward — plus retiring hybrid. Full reasoning: `docs/depth-round.md`
+and `v1-plan.md`.
+
 ---
 
 *Living document. Versioned in repo. Updates noted at top with date and rationale.*
