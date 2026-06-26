@@ -1,0 +1,131 @@
+{
+  "timestamp": "2026-06-15T21:43:46.661198+00:00",
+  "mode": "ablation_fusion_sweep",
+  "match_mode": "fuzzy",
+  "n_questions": 150,
+  "candidates": 20,
+  "k_rrf": 60,
+  "baseline_dense_recall_at_5": 0.44,
+  "sweep": [
+    {
+      "dense_weight": 0.0,
+      "label": "lexical-only",
+      "recall_at_k": {
+        "recall@5": 0.04,
+        "recall@10": 0.0867
+      },
+      "mrr": 0.032,
+      "metrics_generated_recall@5": 0.0,
+      "per_category_recall@5": {
+        "domain-relevant": 0.02,
+        "metrics-generated": 0.0,
+        "novel-generated": 0.1
+      }
+    },
+    {
+      "dense_weight": 0.3,
+      "label": "weighted",
+      "recall_at_k": {
+        "recall@5": 0.08,
+        "recall@10": 0.0933
+      },
+      "mrr": 0.0701,
+      "metrics_generated_recall@5": 0.0,
+      "per_category_recall@5": {
+        "domain-relevant": 0.06,
+        "metrics-generated": 0.0,
+        "novel-generated": 0.18
+      }
+    },
+    {
+      "dense_weight": 0.5,
+      "label": "weighted",
+      "recall_at_k": {
+        "recall@5": 0.3467,
+        "recall@10": 0.44
+      },
+      "mrr": 0.2452,
+      "metrics_generated_recall@5": 0.26,
+      "per_category_recall@5": {
+        "domain-relevant": 0.24,
+        "metrics-generated": 0.26,
+        "novel-generated": 0.54
+      }
+    },
+    {
+      "dense_weight": 0.7,
+      "label": "weighted",
+      "recall_at_k": {
+        "recall@5": 0.4067,
+        "recall@10": 0.54
+      },
+      "mrr": 0.275,
+      "metrics_generated_recall@5": 0.28,
+      "per_category_recall@5": {
+        "domain-relevant": 0.32,
+        "metrics-generated": 0.28,
+        "novel-generated": 0.62
+      }
+    },
+    {
+      "dense_weight": 0.8,
+      "label": "weighted",
+      "recall_at_k": {
+        "recall@5": 0.4067,
+        "recall@10": 0.54
+      },
+      "mrr": 0.275,
+      "metrics_generated_recall@5": 0.28,
+      "per_category_recall@5": {
+        "domain-relevant": 0.32,
+        "metrics-generated": 0.28,
+        "novel-generated": 0.62
+      }
+    },
+    {
+      "dense_weight": 0.9,
+      "label": "weighted",
+      "recall_at_k": {
+        "recall@5": 0.4267,
+        "recall@10": 0.54
+      },
+      "mrr": 0.3032,
+      "metrics_generated_recall@5": 0.32,
+      "per_category_recall@5": {
+        "domain-relevant": 0.32,
+        "metrics-generated": 0.32,
+        "novel-generated": 0.64
+      }
+    },
+    {
+      "dense_weight": 0.95,
+      "label": "weighted",
+      "recall_at_k": {
+        "recall@5": 0.44,
+        "recall@10": 0.54
+      },
+      "mrr": 0.3179,
+      "metrics_generated_recall@5": 0.32,
+      "per_category_recall@5": {
+        "domain-relevant": 0.34,
+        "metrics-generated": 0.32,
+        "novel-generated": 0.66
+      }
+    },
+    {
+      "dense_weight": 1.0,
+      "label": "dense-only",
+      "recall_at_k": {
+        "recall@5": 0.44,
+        "recall@10": 0.54
+      },
+      "mrr": 0.3173,
+      "metrics_generated_recall@5": 0.32,
+      "per_category_recall@5": {
+        "domain-relevant": 0.34,
+        "metrics-generated": 0.32,
+        "novel-generated": 0.66
+      }
+    }
+  ]
+}

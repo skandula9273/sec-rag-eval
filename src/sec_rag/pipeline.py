@@ -21,6 +21,7 @@ from sec_rag.generate.faithfulness import score_faithfulness
 from sec_rag.ingest.embed import Embedder
 from sec_rag.retrieve.dense import RetrievedChunk, dense_search
 from sec_rag.retrieve.hybrid import hybrid_search
+from sec_rag.retrieve.lexical import lexical_search
 from sec_rag.api.schemas import Citation, Metrics, QueryResponse
 
 
@@ -57,8 +58,10 @@ class QueryEngine:
         if r.method == "hybrid":
             return hybrid_search(
                 self.conn, qvec, query, k,
-                candidates=r.candidates, k_rrf=r.k_rrf,
+                candidates=r.candidates, k_rrf=r.k_rrf, dense_weight=r.dense_weight,
             )
+        if r.method == "lexical":
+            return lexical_search(self.conn, query, k)
         if r.method == "dense":
             return dense_search(self.conn, qvec, k)
         raise ValueError(f"unknown retrieval.method: {r.method!r}")
@@ -82,14 +85,26 @@ class QueryEngine:
             self.conn = new_connection(self.secrets, autocommit=True)
             return self._search(query, qvec, k)
 
-    def run(self, query: str, top_k: int | None = None) -> PipelineResult:
-        k = top_k or self.cfg.retrieval.top_k
-        trace_id = uuid.uuid4().hex
+    def retrieve(self, query: str, top_k: int | None = None) -> tuple[list[RetrievedChunk], int]:
+        """Embed the query and retrieve top-k chunks — no generation.
 
+        The retrieval half of run(), exposed so the eval harness can measure
+        recall@k / MRR (pure retrieval metrics) without the Anthropic generation
+        + faithfulness calls. The path is identical to the one run() and the API
+        use, so the recall it measures is the recall a user's query gets — it
+        just stops before generation.
+        """
+        k = top_k or self.cfg.retrieval.top_k
         t0 = time.perf_counter()
         qvec = self.embedder.embed_one(query)
         retrieved = self._retrieve(query, qvec, k)
         retrieval_ms = int((time.perf_counter() - t0) * 1000)
+        return retrieved, retrieval_ms
+
+    def run(self, query: str, top_k: int | None = None) -> PipelineResult:
+        trace_id = uuid.uuid4().hex
+
+        retrieved, retrieval_ms = self.retrieve(query, top_k)
 
         t1 = time.perf_counter()
         gen = generate_answer(query, retrieved, self.cfg.generation, self.secrets)

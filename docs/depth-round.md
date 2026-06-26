@@ -1,0 +1,278 @@
+# Depth round — things I'd be asked about this project
+
+A running notes file for the Flagship depth-round interview (an interviewer picks
+this project and drills it for 45 min: *did you actually do the work, and do you
+understand the choices you made*). Also the draft of the eventual blog post.
+
+**Format for every entry:** the choice → alternatives considered → the tradeoff →
+what I'd do differently. Update it the moment a decision is made, not after.
+
+**Framing note (say this if they treat it like a training project):** this is a
+*retrieval + evaluation* system, not a model-training one. There is no training
+loop, loss function, or FLOPs/parameter tradeoff. The depth here is in retrieval
+design, measurement honesty, and the engineering underneath. Don't manufacture a
+training-curve answer — there isn't one, and saying so is the right answer.
+
+---
+
+## The questions they actually ask — and my answers
+
+### "What was your baseline, and why was your first attempt below it?"
+V0 target floor was **recall@5 0.55**; my dense-retrieval baseline came in at
+**0.44** on FinanceBench (150 q, fuzzy match). Below floor *on purpose* — V0 is
+the baseline to beat, not the finish line. The *why* is the interesting part:
+the per-category split shows prose/narrative questions at **0.66** but
+**metrics-generated (tables/numbers) at 0.32**. Dense retrieval fails on numbers
+for two compounding reasons: (a) cosine similarity is *semantic*, so "revenue
+grew 5%" and "grew 25%" embed almost identically; (b) pypdf flattens 10-K tables
+into whitespace soup before they're ever embedded. That 0.32 is the thesis of the
+entire V1/V2 plan.
+
+### "Tell me about a failure mode you didn't expect and how you debugged it."
+First live eval, substring recall@10 was **2/10** — looks catastrophic. Instead of
+shipping or hiding it, I ran the *same* questions under a fuzzy (token-overlap ≥
+0.5) matcher: **7/10**. The gap meant the metric, not the retriever, was broken.
+Root cause: FinanceBench's gold `evidence_text` spans are large multi-line tables;
+pypdf re-extracts the same text with different whitespace/ordering than the
+dataset's own extraction, so an exact contiguous substring almost never survives a
+512-token chunk. Substring was measuring *text-extraction agreement*, not
+retrieval quality. Fix: report **fuzzy(0.5) as primary, substring as a strict
+lower bound** — a measurement-honesty fix, documented as a dated design-doc
+amendment, not a quiet metric swap.
+
+### "What's the most expensive mistake you made, and what did it teach you?"
+A hybrid-retrieval eval run aborted ~halfway when the Anthropic credit balance hit
+zero: 73/150 scored, 77 errors. The runner had been hardened to be *resilient to
+per-question failures*, so it swallowed the billing outage as 77 "question
+failures" and still emitted an aggregate **recall@5 0.274** — which read like
+hybrid had *regressed* vs the 0.44 baseline. It hadn't; the number was computed
+over a non-random partial slice and was meaningless. **Lesson:** in an eval
+harness whose entire value is honest numbers, infrastructure failures (billing,
+auth) must be *fatal* — never folded into the same resilience path as a genuine
+per-question miss. A partial run that still prints a headline metric is worse than
+a crash. (Fix: classify infra errors as fatal, or suppress aggregates when
+`n_scored << n_questions`.)
+
+### "What's your validation strategy, and why not [alternative]?"
+- Public benchmark (**FinanceBench 150**) run through the **exact same
+  `QueryEngine` as production** — never a second eval-only path, so the numbers
+  describe the deployed system.
+- **Per-category recall**, not just overall — overall recall hides the
+  tables(0.32)/prose(0.66) gap that *is* the finding. "I understand where my
+  system fails" beats "here's my average."
+- **Fuzzy primary + substring lower bound** (see above), **fixed seed (13)**,
+  **temp 0**, **pinned lockfile**, **timestamped JSON committed per run** — one
+  command reproduces the headline numbers from a clean clone.
+- **Pre-registered success criteria**: e.g. V1.1 hybrid must lift recall@5 vs 0.44
+  *and* the tables category vs 0.32 *specifically* — so a lift "from somewhere
+  else" can't be spun as confirming the diagnosis.
+- Why not RAGAS for faithfulness? See the faithfulness entry — it doesn't import
+  under LangChain 1.x; I used its *definition* via a self-contained judge instead.
+
+### "What would you do with another month?"
+In priority order, because the data points here: **(1) real table extraction**
+(unstructured.io / llama-parse) — the 0.32 category is the dominant recall lever
+and pypdf is the bottleneck; (2) the cross-encoder reranker over hybrid
+candidates; (3) latency: connection pool + move the faithfulness judge off the
+request path (p95 ~15.6 s vs <2.5 s target); (4) the 100-query custom eval set for
+multi-doc / freshness / entity-disambiguation coverage; (5) embedding-model
+ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
+
+---
+
+## Decision log (choice / alternatives / tradeoff / would-do-differently)
+
+### Chunking — 512 tokens, 64 overlap, token-window + section-aware (cl100k_base)
+- **Alternatives:** 256 (sharper evidence spans, more fragments, more rows);
+  1024 (more context per chunk, dilutes the embedding, coarser citations).
+- **Tradeoff:** evidence-span precision vs retrieval recall vs cost. 512 is the
+  defensible middle and matches the embedding model's sweet spot.
+- **Would-do-differently / open:** chunk size is a config lever but **not yet
+  ablated** — I can't yet *prove* 512 beats 256 on this corpus. That's a clean
+  ablation I'd run. (Honest gap; don't claim 512 is optimal, only defensible.)
+
+### Embedding model — text-embedding-3-small (1536-dim)
+- **Alternatives:** 3-large (3072-dim, better but ~6× cost + 2× storage/index
+  size), Voyage finance-2 (domain-tuned), open BGE (self-host, free).
+- **Tradeoff:** cost/latency/index-size vs retrieval quality. Chose the cheap,
+  fast, defensible baseline — simpler-first (rule #7).
+- **Would-do-differently:** V2 ablation comparing all four on the *same* corpus &
+  queries. The dim must stay 1536 to match the schema unless I re-index.
+
+### Vector store — pgvector on Neon, HNSW, cosine
+- **Alternatives:** Pinecone / Weaviate (managed vector DBs), FAISS (in-process).
+- **Tradeoff:** one Postgres holds vectors **+** lexical (tsvector) **+** metadata
+  + gives transactional upserts and a free tier — and reads as more rigorous than
+  a turnkey vector SaaS. HNSW over IVFFlat: better recall/latency at this scale,
+  no training step.
+- **Score = 1 − cosine_distance**, theoretically [−1, 1]; a negative score is
+  possible (didn't occur) and would read oddly in the UI — left honest in V0.
+
+### Retrieval method — dense (V0) → hybrid: dense + Postgres FTS, RRF fusion (V1.1)
+- **Alternatives:** pure dense; true BM25 via ParadeDB `pg_search`; weighted
+  normalized score blend instead of RRF.
+- **Tradeoffs / non-obvious findings:**
+  - `pg_search` (ParadeDB BM25) is **deprecated on Neon** — `CREATE EXTENSION`
+    fails. Caught in seconds by *trying it*, not assuming. So lexical = core
+    Postgres FTS (`tsvector` + `ts_rank_cd`), which is TF-based, **not** true Okapi
+    BM25 — a real, stated limitation.
+  - **RRF over weighted blend:** RRF is rank-based, so it needs no score
+    normalization between cosine and `ts_rank_cd` (different scales). That's
+    *why* it's the standard hybrid-fusion choice.
+  - **tsquery construction (the empirical gotcha):** feeding a raw question to
+    `plainto_tsquery`/`websearch_to_tsquery` ANDs every token → a normal question
+    returns **0 hits** because the corpus rarely contains every literal token. Fix:
+    let `plainto_tsquery` drop stopwords + stem, then convert `&` → `|` for
+    OR-ranking. Without stopword stripping, junk tokens ("what", "was") surface the
+    wrong company; with it, a 3M question ranks 3M docs #1–2.
+- **Result (2026-06-15, retrieval-only A/B, 150 q, fuzzy, 0 errors):** hybrid
+  **regressed across the board** — overall recall@5 0.44 → **0.3467**, recall@10
+  0.54 → 0.44, MRR 0.317 → 0.245 — and the pre-registered test **failed**: the
+  metrics-generated (tables) category went **0.32 → 0.26**, the opposite of the
+  hypothesis. (Dense reproduced 0.44 exactly in the same harness, so the
+  comparison is trustworthy.) **Diagnosis (hypothesis, not yet proven):**
+  equal-weight RRF fuses a *noisy* Postgres-FTS lexical list into a stronger dense
+  list and drags good dense hits down — tellingly, even the prose category (dense's
+  strength, 0.66) fell to 0.54, which a genuinely helpful lexical signal would not
+  do. **Next:** measure lexical-only recall (is the signal any good on its own?),
+  then try **weighted fusion** (down-weight lexical) and tune `k_rrf` — both already
+  ablation knobs. **Do not ship hybrid as the default until it beats dense.** The
+  regression is reported, not buried (rule #2).
+- **Decision (2026-06-15) — V1.1b fusion-weight ablation:** before judging hybrid,
+  sweep the fusion weight in **one efficient pass** — retrieve the dense + lexical
+  candidate lists *once* per question, then re-fuse in memory at
+  `dense_weight ∈ {0.0 … 1.0}` (fusion is cheap; re-retrieving is not). The sweep
+  yields three answers at once: `dense_weight = 0.0` is **lexical-only** (the
+  standalone quality of the keyword signal), `1.0` is **dense-only** (must
+  reproduce 0.44 as a sanity check), and the middle is **weighted RRF**. The one
+  question: does *any* blend beat dense's 0.44, or is pure dense the ceiling on
+  this corpus? `dense_weight` is added as a config knob so the winning setting is
+  reproducible through the normal runner (rule #6).
+- **Result (2026-06-15, V1.1b sweep, 150 q, fuzzy, retrieval-only):** **no blend
+  beats dense.** lexical-only (dense_weight 0.0) recall@5 = **0.04**, tables@5 =
+  **0.00** — the Postgres-FTS signal is ~noise on this corpus, and *zero* on the
+  very category it was meant to fix. Recall rises monotonically with dense_weight
+  and only *ties* dense at ≈0.95–1.0 (recall@5 0.44, tables 0.32). **Verdict:
+  pure dense is the ceiling; hybrid (dense + Postgres FTS) is retired as a recall
+  lever.** Dense stays the default; `dense_weight` stays a knob, set to favour
+  dense.
+- **The deeper finding (this is the real takeaway):** lexical's **0.00 on tables**
+  points *upstream*. The exact line-item terms aren't in the chunk text to match
+  because **pypdf flattened the tables at parse time** — so no retriever, dense or
+  lexical, can surface evidence that parsing already destroyed. **The tables gap
+  is a parsing problem, not a retrieval-method problem.** That's direct,
+  evidence-backed support for prioritising **table extraction** (unstructured.io /
+  llama-parse) over further retrieval/fusion tuning — the hunch from the
+  "feature-complete, adapted by findings" call is now a measured result. This is
+  the depth-round answer to "a failure mode you didn't expect": I expected hybrid
+  to help tables; instead it proved the bottleneck is upstream of retrieval.
+
+### Generation — Claude Haiku 4.5, temperature 0, grounded prompt, numbered citations
+- **Alternatives:** Sonnet/Opus (stronger, slower, pricier).
+- **Tradeoff:** generation is **not** the bottleneck — faithfulness is already
+  **0.941** (> 0.80 target), so a bigger model buys nothing on the metric that
+  matters; retrieval is where all the error is. Simpler-first holds.
+- Temp 0 for reproducibility; the prompt forces grounding and the parser pulls
+  `[n]` citation markers back out to link answer → source.
+
+### Faithfulness — self-contained Haiku judge (RAGAS *definition*), not the RAGAS library
+- **Alternatives:** RAGAS proper (the locked design doc named it).
+- **Tradeoff:** RAGAS is built for LangChain 0.x and won't import under LangChain
+  1.x (imports `ChatVertexAI` paths that no longer exist); pinning back breaks
+  `langchain-openai`/`langgraph` and risks the `openai`/`anthropic` deps. A working
+  RAGAS = a fragile dependency tower → violates reproducibility (rule #4). So: one
+  judge call (temp 0) scoring the fraction of answer claims supported by retrieved
+  sources — RAGAS's definition, zero added deps, reproducible. Verified
+  discriminating (grounded → 1.0, hallucinated → 0.0; grounded refusal → 1.0).
+- **Known limitation (say it before they do):** the judge is itself an LLM →
+  LLM-judge bias. The mitigation is spot-checking ~20 judgments/run for agreement;
+  that's on the list, not yet done.
+
+### Eval cost / pricing
+- Haiku 4.5 confirmed at **$1.00 / 1M input, $5.00 / 1M output**; measured V0
+  **$0.0063/query** (under the <$0.01 floor). `cost_is_estimate` is *derived*
+  (`model not in PRICING`), not hardcoded — a future unpriced model auto-flags
+  itself rather than silently reporting a fake number.
+
+### Deployment — FastAPI on Cloud Run, single shared DB connection
+- **Tradeoff:** scales-to-zero, free tier. **Known debt:** one long-lived
+  connection serializes concurrent queries (safe — verified 6/6 concurrent — but a
+  throughput ceiling and a latency contributor). Connection pool is the fix; named
+  as debt, not hidden.
+
+### Retrieval depth — top_k = 5, report recall@5 and recall@10
+- **Alternatives:** larger k (more context to the LLM, more cost/latency, more
+  distractors that can pull faithfulness down); k=3 (sharper, riskier on recall).
+- **Tradeoff:** 5 chunks is enough context for grounded single-/few-fact answers
+  while keeping the prompt cheap; recall@5 is the headline, recall@10 the
+  "how-much-is-just-out-of-reach" diagnostic. The benchmark floor is defined at @5.
+
+### Architecture — one shared `QueryEngine` (the API and the eval call the same path)
+- **Alternative:** a separate, eval-only retrieval/generation path (common, and
+  faster to hack).
+- **Tradeoff:** a second path means the numbers describe something the user never
+  hits. One engine guarantees the committed metrics describe the *deployed*
+  system. Costs some flexibility (eval can't shortcut around generation) — worth
+  it; this is the single most important honesty decision in the codebase.
+
+### Eval — retrieval-only mode (`--no-generate`), recall measured without the LLM
+- **Decision (2026-06-15):** added a retrieval-only eval path. recall@k / MRR are
+  pure *retrieval* metrics — they depend only on the query embedding + the DB, not
+  on generation — so the runner scores them with **zero Anthropic calls**.
+- **Alternative (what we had):** always run the full pipeline; every question
+  generates + judges, so a credit outage killed the run *and* the recall numbers
+  (the misleading 0.274 partial result).
+- **Tradeoff / why it stays honest:** `run()` and the new `retrieve()` share the
+  *same* retrieval code, so retrieval-only recall == full-pipeline recall (verified:
+  dense reproduced the committed 0.44 exactly). The JSON self-marks
+  `mode: retrieval_only` and nulls cost/faithfulness so a free run can't be misread
+  as a full one. Bonus: isolates the retrieval ablation from generation cost +
+  latency, and is the fix for the credit-aborted-eval footgun — infra failure no
+  longer masquerades as a result.
+
+### Methodology — V1 as separate, individually-measured increments (one variable at a time)
+- **Alternative:** the locked design doc bundled V1 = corpus expansion + hybrid +
+  reranker + 100 custom queries as one phase.
+- **Tradeoff:** changing the corpus *and* the retrieval method at once makes the
+  recall delta un-attributable (more docs = more distractors, which moves recall
+  independent of the algorithm). Unbundling into V1.1 hybrid → V1.2 reranker →
+  V1.3 corpus → V1.4 full eval, each A/B'd against the committed 0.44 baseline,
+  is what "ablation-friendly, one variable at a time" actually requires. Slower to
+  the impressive-sounding end state; the *attribution* is the whole point.
+
+### Strategic direction — feature-complete to the doc's ambition, adapted by findings
+- **Alternative I proposed and we rejected:** trim scope to a pure "ablation
+  story" (drop S&P 100 / observability / Next.js), maximize measurement depth.
+- **Decision (2026-06-11):** keep the full design-doc ambition, but let V0 data
+  reshape *sequence and emphasis* — pull table-extraction forward (it's the
+  dominant recall lever at 0.32), treat retrieval as the only bottleneck
+  (faithfulness already solved at 0.94), and **decouple the faithfulness judge
+  from the production latency number** (keep the demo badge, move the judge
+  async/batch so p95 is measured without the second LLM call). Reasoning: the
+  ambition is what makes it portfolio-grade; the findings just aim it.
+
+### Demo surface — Streamlit, model hidden, cited-vs-retrieved badges
+- **Alternatives:** Next.js playground (V2-optional); exposing a model selector.
+- **Tradeoffs:** the project's value is eval rigor, not frontend — Streamlit + a
+  tight README GIF is enough signal. Model choice stays a dev/eval concern (it's
+  in the JSON for traceability, not a UI affordance) so the demo doesn't invite
+  "try GPT-4" noise. **Cited vs retrieved** chunks get different badge styles so a
+  viewer sees what was *in context* vs what the LLM *actually drew from* — honesty
+  made visible, no overclaiming.
+
+### Benchmark — FinanceBench (150 q), license-aware
+- **Alternative:** only hand-built queries (no public anchor, un-comparable).
+- **Tradeoff:** a public benchmark gives numbers that can be set against published
+  baselines; the cost is that its gold spans are messy tables (drove the
+  fuzzy-match decision). CC-BY-NC-4.0 → non-commercial portfolio use only, PDFs
+  not redistributed. The 100 hand-built custom queries (V1.3) complement, not
+  replace, it.
+
+---
+
+## Meta-answer (if they ask "how did you keep yourself honest?")
+A written contract (`CLAUDE.md`) with non-negotiable rules — no fake APIs, never
+cherry-pick numbers, pair every choice with its reason, one variable per ablation —
+and a **locked design doc where every scope deviation needs a dated amendment with
+rationale**. Those amendments are a paper trail of *why* the system is what it is.
+This file is largely an extraction of that trail.

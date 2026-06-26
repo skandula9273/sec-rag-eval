@@ -55,13 +55,17 @@ class EmbeddingConfig(BaseModel):
 
 
 class RetrievalConfig(BaseModel):
-    method: str = "dense"  # "dense" (V0) | "hybrid" (V1: dense + lexical RRF)
+    method: str = "dense"  # "dense" (V0) | "hybrid" (V1) | "lexical" (FTS-only)
     top_k: int = 5
     distance: str = "cosine"
     # Hybrid knobs (used only when method == "hybrid"). Defaults are inert for
     # dense, so v0.yaml behaviour is unchanged.
     candidates: int = 20  # depth per retriever before fusion
     k_rrf: int = 60       # RRF damping constant
+    # Weighted RRF: dense contributions are scaled by dense_weight, lexical by
+    # (1 - dense_weight). 0.5 = balanced (the original equal-weight RRF ordering);
+    # 1.0 = dense-only; 0.0 = lexical-only. Ablation lever for the fusion sweep.
+    dense_weight: float = 0.5
 
 
 class GenerationConfig(BaseModel):

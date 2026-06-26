@@ -48,6 +48,27 @@ def test_empty_lexical_falls_back_to_dense_order():
     assert [c.chunk_id for c in out] == [1, 2, 3]
 
 
+def test_dense_weight_1_is_dense_only():
+    # b is lexical-only; at dense_weight=1.0 lexical gets zero weight -> a wins.
+    a, b = _chunk(100), _chunk(200)
+    out = _rrf_fuse([a], [b], k_rrf=60, top_k=2, dense_weight=1.0)
+    assert out[0].chunk_id == 100
+
+
+def test_dense_weight_0_is_lexical_only():
+    # at dense_weight=0.0 the dense list gets zero weight -> the lexical hit wins.
+    a, b = _chunk(100), _chunk(200)
+    out = _rrf_fuse([a], [b], k_rrf=60, top_k=2, dense_weight=0.0)
+    assert out[0].chunk_id == 200
+
+
+def test_default_weight_preserves_equal_rrf_order():
+    # 0.5 scales both lists uniformly -> same order as the original equal-weight RRF.
+    a, b = _chunk(100), _chunk(200)
+    out = _rrf_fuse([a, b], [b], k_rrf=60, top_k=2)  # b in both -> b first
+    assert [c.chunk_id for c in out] == [200, 100]
+
+
 def test_prefers_dense_object_for_display_score():
     # same chunk_id in both; dense object has the cosine display score we want.
     dense_obj = _chunk(1, score=0.87)

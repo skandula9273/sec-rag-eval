@@ -1,0 +1,59 @@
+{
+  "timestamp": "2026-06-15T21:20:05.865529+00:00",
+  "n_questions": 150,
+  "n_scored": 150,
+  "match_mode": "fuzzy",
+  "mode": "retrieval_only",
+  "config": {
+    "chunking": {
+      "strategy": "token",
+      "max_tokens": 512,
+      "overlap_tokens": 64,
+      "encoder": "cl100k_base"
+    },
+    "embedding_model": "text-embedding-3-small",
+    "retrieval": {
+      "method": "hybrid",
+      "top_k": 5,
+      "distance": "cosine",
+      "candidates": 20,
+      "k_rrf": 60
+    },
+    "generation_model": "claude-haiku-4-5",
+    "seed": 13
+  },
+  "recall_at_k": {
+    "recall@5": 0.3467,
+    "recall@10": 0.44
+  },
+  "mrr": 0.2452,
+  "latency_ms": {
+    "p50": 5206.0,
+    "p95": 8012.0,
+    "p99": 8891.0,
+    "mean": 5188.3
+  },
+  "cost_usd": null,
+  "per_category_recall": {
+    "domain-relevant": {
+      "recall@5": 0.24,
+      "recall@10": 0.34
+    },
+    "metrics-generated": {
+      "recall@5": 0.26,
+      "recall@10": 0.32
+    },
+    "novel-generated": {
+      "recall@5": 0.54,
+      "recall@10": 0.66
+    }
+  },
+  "faithfulness": {
+    "enabled": false,
+    "mean": null,
+    "n_scored": 0
+  },
+  "questions_without_evidence": 0,
+  "n_errors": 0,
+  "errors": []
+}
