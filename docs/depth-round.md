@@ -231,6 +231,27 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
   embed (this ablation, or a real corpus ingest) died on a 429. Added bounded
   exponential backoff + tests.
 
+### Embedding model — 3-large is THE lever (tables 0.32 -> 0.62) — first win
+- **Setup:** local exact-cosine ablation, same 512 chunk texts, only the model
+  differs. 3-small reuses prod embeddings; 3-large (3072-dim) embeds the same
+  texts locally.
+- **Result (2026-06-27, 150 q, fuzzy):** recall@5 **0.44 -> 0.5733** (+0.13),
+  recall@10 0.54 -> 0.667, MRR 0.317 -> 0.403. Per category: **tables 0.32 -> 0.62
+  (+0.30, nearly doubled)**, domain 0.34 -> 0.44, prose 0.66 -> 0.66 (flat, already
+  adequate). Crosses the V0 recall@5 floor (0.55) that 3-small missed.
+- **This validates the whole hunt:** five negatives (hybrid, table-extraction,
+  reranker, chunk-size, HNSW) localized the bottleneck to the *embedding
+  representation*; the model swap delivered. The depth-round arc: a methodical
+  elimination, not a lucky guess — "I changed one variable at a time against a
+  committed baseline until the data pointed at the embedding, then proved it."
+- **The catch (productionizing):** adopting 3-large needs `vector(3072)` in Neon =
+  ~2x per-vector storage. The 3-small corpus already uses 468/512 MB, so a 3-large
+  corpus (~700 MB+) does NOT fit the free tier -- adoption requires a Neon paid
+  tier (which also unblocks corpus expansion). The ablation proves the lever; the
+  measured +0.13 / +0.30-on-tables is the evidence that justifies the upgrade.
+- **Open:** Voyage finance-2 (domain-tuned) may lift tables further (optional next
+  test). Cost: 3-large embeddings are ~6.5x 3-small ($0.13 vs $0.02 / 1M tokens).
+
 ### Generation — Claude Haiku 4.5, temperature 0, grounded prompt, numbered citations
 - **Alternatives:** Sonnet/Opus (stronger, slower, pricier).
 - **Tradeoff:** generation is **not** the bottleneck — faithfulness is already
