@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-06-27T19:12:55.175201+00:00",
+  "mode": "ablation_rerank_over_large",
+  "match_mode": "fuzzy",
+  "index": "local exact cosine",
+  "embedding_model": "text-embedding-3-large",
+  "candidates": 50,
+  "rerank_model": "BAAI/bge-reranker-base",
+  "n_questions": 150,
+  "n_chunks": 25992,
+  "arms": {
+    "3-large dense": {
+      "recall_at_k": {
+        "recall@5": 0.5733,
+        "recall@10": 0.6667
+      },
+      "mrr": 0.4147,
+      "per_category_recall@5": {
+        "domain-relevant": 0.44,
+        "metrics-generated": 0.62,
+        "novel-generated": 0.66
+      }
+    },
+    "3-large + rerank": {
+      "recall_at_k": {
+        "recall@5": 0.38,
+        "recall@10": 0.5867
+      },
+      "mrr": 0.2898,
+      "per_category_recall@5": {
+        "domain-relevant": 0.24,
+        "metrics-generated": 0.34,
+        "novel-generated": 0.56
+      }
+    }
+  }
+}

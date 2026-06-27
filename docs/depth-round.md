@@ -205,6 +205,12 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
 - **Depth-round lesson:** a diagnostic that proves an *opportunity* (26%
   promotable) does NOT prove a given *tool* can capture it. Measure the tool;
   don't assume the opportunity is yours.
+- **Confirmed retired (2026-06-27, retested over 3-large candidates):** with the
+  much stronger 3-large bi-encoder, the reranker hurts *worse* — recall@5 0.573 ->
+  **0.38**, tables 0.62 -> **0.34**. More good candidates = more for it to demote.
+  The BGE-base cross-encoder is wrong for this financial-retrieval task,
+  independent of candidate quality. **Definitively retired; the config is dense
+  (3-large) with no rerank.**
 
 ### Chunk size — smaller is WORSE (256 vs 512); dilution hypothesis rejected
 - **Setup:** local in-memory exact-cosine ablation. Neon's free tier is maxed
