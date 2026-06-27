@@ -165,7 +165,25 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
   llama-parse) over further retrieval/fusion tuning — the hunch from the
   "feature-complete, adapted by findings" call is now a measured result. This is
   the depth-round answer to "a failure mode you didn't expect": I expected hybrid
-  to help tables; instead it proved the bottleneck is upstream of retrieval.
+  to help tables; instead it proved the bottleneck is elsewhere — see the
+  correction below for *where*.
+- **Correction (2026-06-26, two cheap diagnostics before any re-ingest):** the
+  parsing hypothesis was **wrong**, and the diagnostic-first checkpoint caught it
+  before a full re-embed. (a) *Parser comparison* (8 table Qs): gold table evidence
+  is recoverable in a 512-tok window under **pypdf 8/8**; pdfplumber does **not**
+  help (sometimes worse, 0.95 → 0.91) — table evidence survives parsing. (b)
+  *Retrieval depth* (50 metrics-generated Qs, dense top-100): evidence ranks 1–5 =
+  32%, **6–20 = +26%** (in the candidate set, below top-5), 21–100 = +10%, and
+  **misses top-100 for 32%**. So the tables gap is **two problems, not parsing**: a
+  **ranking** problem (26% at rank 6–20 → a cross-encoder reranker can promote
+  these) and a **recall** problem (32% absent from top-100 → embedding/chunking
+  lever; no reranker reaches these). **Decisions:** table extraction dropped;
+  **reranker is the next build** (widen candidates 20 → 50 to reach the 21–50
+  band); **embedding-model ablation** (3-large / Voyage) promoted to target the
+  deep-miss band; recall@5 0.75 needs *both*. **The depth-round lesson:** I
+  committed an amendment on the parsing hypothesis, then disproved my own
+  hypothesis with a ~5-min diagnostic instead of a wasted corpus re-embed —
+  cheap tests before expensive commitments.
 
 ### Generation — Claude Haiku 4.5, temperature 0, grounded prompt, numbered citations
 - **Alternatives:** Sonnet/Opus (stronger, slower, pricier).

@@ -374,6 +374,47 @@ Same V2 end state (table extraction was always in scope); the change is *orderin
 — pulling it forward — plus retiring hybrid. Full reasoning: `docs/depth-round.md`
 and `v1-plan.md`.
 
+### 2026-06-26 (later) — Correction: tables gap is ranking + recall, NOT parsing
+
+The amendment directly above promoted **table extraction** on the hypothesis that
+`pypdf` flattening tables put the evidence out of retrieval's reach. **Two cheap
+diagnostics, run before any re-ingest, disproved that** — recorded honestly
+(rule #2). This supersedes the parsing decision above.
+
+**Diagnostic A — parser comparison (8 metrics-generated questions).** Chunked each
+source doc under pypdf vs pdfplumber (text + extracted tables) into identical
+512-tok windows, then applied the eval's own fuzzy matcher: the gold table
+evidence is recoverable in some window under **pypdf 8/8**, and **pdfplumber does
+not improve it** (sometimes worse, e.g. 0.95 → 0.91 overlap, because flattening
+cells reshapes text away from FinanceBench's gold spans). **Table evidence
+survives parsing.**
+
+**Diagnostic B — retrieval depth (50 metrics-generated questions, dense top-100).**
+Rank of the first evidence-matching chunk: **1–5 = 32%**, 6–20 = +26% (cum 58%),
+21–100 = +10% (cum 68%), **not in top-100 = 32%**.
+
+**Diagnosis — two distinct sub-problems, neither parsing:**
+1. **Ranking (~26%, ranks 6–20):** evidence is in the candidate set, below top-5.
+   A cross-encoder reranker can promote it.
+2. **Recall (~32%, miss >100):** dense never surfaces it within 100 — an
+   embedding/chunking problem; a reranker cannot help these.
+
+**Amendment:**
+1. **Table extraction is dropped as a lever** (disproven). pypdf is retained.
+   `pdfplumber` was installed for the diagnostic; not adopted.
+2. **Reranker (BGE cross-encoder) is the next increment** — targets the rank-6–20
+   band. Widen candidate depth (20 → 50) to also reach the 21–50 band.
+3. **Embedding-model ablation (3-large / Voyage finance) is promoted** from a
+   general V2 ablation to the targeted lever for the deep-miss (>100) band.
+4. **Realistic ceiling, stated up front:** reranker-over-dense tops out near the
+   in-candidate share (~58% recall@5 on tables); the deep-miss third needs the
+   embedding/chunking lever. **recall@5 0.75 requires both**, not either alone.
+
+**Rationale:** rule #6 says attack the *measured* bottleneck; the measurement now
+localizes it to retrieval ranking + recall, not parsing. The diagnostic-first
+checkpoint turned a wrong committed hypothesis into a ~5-minute correction instead
+of a wasted full-corpus re-embed. Full detail: `docs/depth-round.md`.
+
 ---
 
 *Living document. Versioned in repo. Updates noted at top with date and rationale.*
