@@ -185,6 +185,27 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
   hypothesis with a ~5-min diagnostic instead of a wasted corpus re-embed —
   cheap tests before expensive commitments.
 
+### Reranker (V1.2) — built and measured; BGE base does NOT help here
+- **Choice:** BGE cross-encoder base over dense top-50 → top-5; the V1.1b
+  diagnostic said 26% of table evidence sat at ranks 6–20, promotable by a joint
+  query+chunk scorer. Confirmed it installs + discriminates (smoke test 1.0 vs 0.0).
+- **Result (2026-06-27, retrieval-only, 150 q, fuzzy, 0 errors):** **regressed
+  overall** — recall@5 0.44 → **0.393**, MRR 0.317 → 0.271. Per category: tables
+  **0.32 → 0.34** (+0.02, noise), **domain-relevant 0.34 → 0.20 (−0.14)**, prose
+  0.66 → 0.64. recall@10 flat (0.54 → 0.533 — same pool, just reordered).
+- **Why:** a general-domain cross-encoder isn't free. It captured almost none of
+  the promotable 26% and **demoted good dense hits** — for every chunk promoted it
+  pushed another out of top-5. The bi-encoder is already reasonable on this domain;
+  a generic reranker trades wins for losses.
+- **Decision:** BGE-base rerank-over-dense is not the lever. Kept as a config knob
+  (`rerank: off` default) + documented negative result. Next: a cheap
+  `candidates=20` confirm (does a smaller pool stop the bleeding?), then pivot to
+  the **embedding lever** (3-large / Voyage finance) — the only thing that reaches
+  the 32% deep-miss band a reranker never sees.
+- **Depth-round lesson:** a diagnostic that proves an *opportunity* (26%
+  promotable) does NOT prove a given *tool* can capture it. Measure the tool;
+  don't assume the opportunity is yours.
+
 ### Generation — Claude Haiku 4.5, temperature 0, grounded prompt, numbered citations
 - **Alternatives:** Sonnet/Opus (stronger, slower, pricier).
 - **Tradeoff:** generation is **not** the bottleneck — faithfulness is already

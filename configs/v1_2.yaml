@@ -1,0 +1,40 @@
+# V1.2: dense retrieval + cross-encoder reranker (BGE base).
+# One variable changed vs the dense baseline (recall@5 0.44): rerank = on.
+# Rationale (V1.1b diagnostics): 26% of table evidence sits at dense ranks 6-20 —
+# in the candidate set but below top-5. A cross-encoder reads query+chunk jointly
+# and can promote it. candidates = 50 also reaches the 21-50 band (cum ceiling
+# ~68%). v0.yaml stays the baseline; this is the clean A/B.
+
+corpus: financebench
+
+chunking:
+  strategy: token
+  max_tokens: 512
+  overlap_tokens: 64
+  encoder: cl100k_base
+
+embedding:
+  provider: openai
+  model: text-embedding-3-small
+  dim: 1536
+  batch_size: 128
+
+retrieval:
+  method: dense             # rerank over DENSE candidates (hybrid retired in V1.1)
+  top_k: 5
+  distance: cosine
+  rerank: true
+  rerank_model: BAAI/bge-reranker-base
+  candidates: 50            # dense top-50 -> cross-encoder rerank -> top_k
+
+generation:
+  provider: anthropic
+  model: claude-haiku-4-5
+  max_tokens: 1024
+  temperature: 0.0
+
+eval:
+  dataset: PatronusAI/financebench
+  recall_ks: [5, 10]
+  seed: 13
+  faithfulness: false

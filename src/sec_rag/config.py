@@ -66,6 +66,10 @@ class RetrievalConfig(BaseModel):
     # (1 - dense_weight). 0.5 = balanced (the original equal-weight RRF ordering);
     # 1.0 = dense-only; 0.0 = lexical-only. Ablation lever for the fusion sweep.
     dense_weight: float = 0.5
+    # Cross-encoder reranker (V1.2). When on, fetch ``candidates`` from the base
+    # retriever, rerank with rerank_model, return top_k. Inert when off.
+    rerank: bool = False
+    rerank_model: str = "BAAI/bge-reranker-base"
 
 
 class GenerationConfig(BaseModel):

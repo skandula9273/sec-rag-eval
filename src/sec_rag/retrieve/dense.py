@@ -29,6 +29,7 @@ class RetrievedChunk:
     section: str | None
     content: str
     retrieval_score: float
+    rerank_score: float | None = None  # set by retrieve/rerank.py (V1.2) when reranking
 
 
 _SQL = """

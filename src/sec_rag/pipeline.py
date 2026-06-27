@@ -22,6 +22,7 @@ from sec_rag.ingest.embed import Embedder
 from sec_rag.retrieve.dense import RetrievedChunk, dense_search
 from sec_rag.retrieve.hybrid import hybrid_search
 from sec_rag.retrieve.lexical import lexical_search
+from sec_rag.retrieve.rerank import rerank
 from sec_rag.api.schemas import Citation, Metrics, QueryResponse
 
 
@@ -52,19 +53,32 @@ class QueryEngine:
     def __exit__(self, *exc) -> None:
         self.close()
 
-    def _search(self, query: str, qvec: list[float], k: int) -> list[RetrievedChunk]:
-        """Run the configured retriever: dense (V0) or hybrid (V1)."""
+    def _candidates(self, query: str, qvec: list[float], depth: int) -> list[RetrievedChunk]:
+        """Top-``depth`` from the configured base retriever (dense | hybrid | lexical)."""
         r = self.cfg.retrieval
         if r.method == "hybrid":
             return hybrid_search(
-                self.conn, qvec, query, k,
+                self.conn, qvec, query, depth,
                 candidates=r.candidates, k_rrf=r.k_rrf, dense_weight=r.dense_weight,
             )
         if r.method == "lexical":
-            return lexical_search(self.conn, query, k)
+            return lexical_search(self.conn, query, depth)
         if r.method == "dense":
-            return dense_search(self.conn, qvec, k)
+            return dense_search(self.conn, qvec, depth)
         raise ValueError(f"unknown retrieval.method: {r.method!r}")
+
+    def _search(self, query: str, qvec: list[float], k: int) -> list[RetrievedChunk]:
+        """Retrieve top-k, optionally reranking a wider candidate pool first (V1.2).
+
+        With rerank on, fetch ``candidates`` from the base retriever, then let the
+        cross-encoder pick the top-k. Rerank latency is currently folded into
+        retrieval_ms (rerank_ms left None); a separate breakdown is a follow-up.
+        """
+        r = self.cfg.retrieval
+        if r.rerank:
+            cands = self._candidates(query, qvec, r.candidates)
+            return rerank(query, cands, k, model_name=r.rerank_model)
+        return self._candidates(query, qvec, k)
 
     def _retrieve(self, query: str, qvec: list[float], k: int) -> list[RetrievedChunk]:
         """Retrieve with one reconnect on a dead connection.
@@ -133,6 +147,7 @@ class QueryEngine:
                 section=c.section,
                 excerpt=c.content,
                 retrieval_score=c.retrieval_score,
+                rerank_score=c.rerank_score,
             )
             for i, c in enumerate(retrieved, start=1)
         ]
