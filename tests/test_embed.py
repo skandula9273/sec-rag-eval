@@ -24,6 +24,14 @@ def _rate_limit_error():
     return RateLimitError("rate limited", response=httpx.Response(429, request=req), body=None)
 
 
+def _quota_error():
+    req = httpx.Request("POST", "https://api.openai.com/v1/embeddings")
+    return RateLimitError(
+        "Error code: 429 - insufficient_quota: exceeded your current quota",
+        response=httpx.Response(429, request=req), body=None,
+    )
+
+
 def _embedder():
     e = Embedder.__new__(Embedder)  # bypass __init__ (no real OpenAI client / key)
     e.model, e.dim, e.batch_size = "m", 3, 2
@@ -59,3 +67,19 @@ def test_gives_up_after_max_retries(monkeypatch):
     e.client = type("C", (), {"embeddings": Embeddings()})()
     with pytest.raises(RateLimitError):
         e.embed(["a"])
+
+
+def test_fails_fast_on_insufficient_quota(monkeypatch):
+    monkeypatch.setattr(embmod.time, "sleep", lambda s: None)
+    calls = {"n": 0}
+
+    class Embeddings:
+        def create(self, model, input):
+            calls["n"] += 1
+            raise _quota_error()
+
+    e = _embedder()
+    e.client = type("C", (), {"embeddings": Embeddings()})()
+    with pytest.raises(RateLimitError):
+        e.embed(["a"])
+    assert calls["n"] == 1  # billing error: no retries

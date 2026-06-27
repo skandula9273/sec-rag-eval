@@ -34,14 +34,22 @@ class Embedder:
         self.batch_size = cfg.batch_size
 
     def _create(self, batch: list[str]):
-        """One embeddings call with bounded exponential backoff on transient errors."""
+        """One embeddings call with bounded backoff on transient errors.
+
+        A 429 with ``insufficient_quota`` is a BILLING failure (out of credits),
+        not a transient rate limit — retrying just burns backoff cycles before the
+        same failure and hides the real cause. Fail fast on it (same rule as the
+        eval runner: infra/billing errors are fatal); retry only true transients.
+        """
         from openai import APIConnectionError, APITimeoutError, RateLimitError
 
         delay = 2.0
         for attempt in range(_MAX_RETRIES + 1):
             try:
                 return self.client.embeddings.create(model=self.model, input=batch)
-            except (RateLimitError, APITimeoutError, APIConnectionError):
+            except (RateLimitError, APITimeoutError, APIConnectionError) as e:
+                if "insufficient_quota" in str(e):  # billing, not transient -> fail fast
+                    raise
                 if attempt == _MAX_RETRIES:
                     raise
                 time.sleep(delay)
