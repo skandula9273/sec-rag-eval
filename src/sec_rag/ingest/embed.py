@@ -9,7 +9,15 @@ misalign embeddings with their input text.
 
 from __future__ import annotations
 
+import time
+
 from sec_rag.config import EmbeddingConfig, Secrets
+
+# Transient OpenAI failures worth retrying: per-minute rate limits (429) and
+# network/timeout blips. A large corpus easily exceeds the 1M tokens/min limit,
+# so embedding back-to-back batches 429s without this — exponential backoff
+# self-paces the run under the TPM ceiling instead of crashing the ingest.
+_MAX_RETRIES = 6
 
 
 class Embedder:
@@ -25,6 +33,20 @@ class Embedder:
         self.dim = cfg.dim
         self.batch_size = cfg.batch_size
 
+    def _create(self, batch: list[str]):
+        """One embeddings call with bounded exponential backoff on transient errors."""
+        from openai import APIConnectionError, APITimeoutError, RateLimitError
+
+        delay = 2.0
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                return self.client.embeddings.create(model=self.model, input=batch)
+            except (RateLimitError, APITimeoutError, APIConnectionError):
+                if attempt == _MAX_RETRIES:
+                    raise
+                time.sleep(delay)
+                delay = min(delay * 2, 30.0)
+
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed texts, preserving input order. Empty input -> empty output."""
         if not texts:
@@ -32,7 +54,7 @@ class Embedder:
         vectors: list[list[float]] = []
         for i in range(0, len(texts), self.batch_size):
             batch = texts[i : i + self.batch_size]
-            resp = self.client.embeddings.create(model=self.model, input=batch)
+            resp = self._create(batch)
             ordered = sorted(resp.data, key=lambda d: d.index)
             for d in ordered:
                 if len(d.embedding) != self.dim:

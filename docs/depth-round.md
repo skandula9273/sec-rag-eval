@@ -206,6 +206,31 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
   promotable) does NOT prove a given *tool* can capture it. Measure the tool;
   don't assume the opportunity is yours.
 
+### Chunk size — smaller is WORSE (256 vs 512); dilution hypothesis rejected
+- **Setup:** local in-memory exact-cosine ablation. Neon's free tier is maxed
+  (468/512 MB; a second corpus `DiskFull`s), so the experiment runs off a numpy
+  index, not the prod store — same model (3-small), only chunk size differs. 512
+  reuses prod embeddings; 256 re-chunked + embedded locally.
+- **Result (2026-06-27, 150 q, fuzzy, exact search):**
+  - **512-exact reproduces the committed 0.44 exactly** (recall@5 0.44, @10 0.54,
+    MRR 0.317, tables 0.32) — validates the local harness AND shows Neon's
+    approximate HNSW was NOT costing recall.
+  - **256 is much worse everywhere:** recall@5 0.44 → **0.28**, @10 0.54 → 0.36,
+    MRR → 0.208; tables 0.32 → 0.18, prose 0.66 → 0.44.
+- **Why (+ honest caveat):** the dilution hypothesis was backwards. recall@k is
+  fuzzy ≥0.5 token-overlap vs the gold evidence, and FinanceBench spans are large
+  multi-line tables. A 512-token chunk holds more of the span so it clears the 0.5
+  bar more often; 256 splits the span across chunks (none clears it) AND doubles
+  the distractors. So recall@k is partly **coupled to chunk size** — bigger chunks
+  inflate it. Real signal + a measurement artifact, both pushing the same way.
+- **Decision:** 256 rejected; 512 stays. The lever points toward LARGER chunks,
+  but that trades against citation precision + generation cost and partly games the
+  overlap metric — not a clean win. Next real lever: the embedding MODEL
+  (3-large / Voyage), now testable via the same local index (bypasses Neon's cap).
+- **Bonus fix this surfaced:** `embed.py` had no rate-limit retry, so any large
+  embed (this ablation, or a real corpus ingest) died on a 429. Added bounded
+  exponential backoff + tests.
+
 ### Generation — Claude Haiku 4.5, temperature 0, grounded prompt, numbered citations
 - **Alternatives:** Sonnet/Opus (stronger, slower, pricier).
 - **Tradeoff:** generation is **not** the bottleneck — faithfulness is already

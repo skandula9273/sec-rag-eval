@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-06-27T18:13:33.752316+00:00",
+  "mode": "ablation_chunksize_local",
+  "match_mode": "fuzzy",
+  "index": "local exact cosine",
+  "embedding_model": "text-embedding-3-small",
+  "n_questions": 150,
+  "n_chunks": {
+    "512": 25992,
+    "256": 52607
+  },
+  "committed_baseline_512_neon": {
+    "recall@5": 0.44,
+    "recall@10": 0.54,
+    "tables@5": 0.32
+  },
+  "arms": {
+    "512": {
+      "recall_at_k": {
+        "recall@5": 0.44,
+        "recall@10": 0.54
+      },
+      "mrr": 0.3172,
+      "per_category_recall@5": {
+        "domain-relevant": 0.34,
+        "metrics-generated": 0.32,
+        "novel-generated": 0.66
+      }
+    },
+    "256": {
+      "recall_at_k": {
+        "recall@5": 0.28,
+        "recall@10": 0.36
+      },
+      "mrr": 0.2084,
+      "per_category_recall@5": {
+        "domain-relevant": 0.22,
+        "metrics-generated": 0.18,
+        "novel-generated": 0.44
+      }
+    }
+  }
+}
