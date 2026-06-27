@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-06-27T20:50:04.137133+00:00",
+  "mode": "ablation_chunksize_large",
+  "match_mode": "fuzzy",
+  "index": "local exact cosine",
+  "embedding_model": "text-embedding-3-large",
+  "overlap_tokens": 64,
+  "n_questions": 150,
+  "n_chunks": {
+    "512": 25992,
+    "768": 18890,
+    "1024": 15192
+  },
+  "caveat": "recall@k is partly inflated by larger chunks (fuzzy overlap vs large gold spans)",
+  "arms": {
+    "512": {
+      "recall_at_k": {
+        "recall@5": 0.5733,
+        "recall@10": 0.6667
+      },
+      "mrr": 0.4032,
+      "per_category_recall@5": {
+        "domain-relevant": 0.44,
+        "metrics-generated": 0.62,
+        "novel-generated": 0.66
+      }
+    },
+    "768": {
+      "recall_at_k": {
+        "recall@5": 0.6,
+        "recall@10": 0.72
+      },
+      "mrr": 0.4691,
+      "per_category_recall@5": {
+        "domain-relevant": 0.52,
+        "metrics-generated": 0.64,
+        "novel-generated": 0.64
+      }
+    },
+    "1024": {
+      "recall_at_k": {
+        "recall@5": 0.64,
+        "recall@10": 0.7667
+      },
+      "mrr": 0.4802,
+      "per_category_recall@5": {
+        "domain-relevant": 0.54,
+        "metrics-generated": 0.72,
+        "novel-generated": 0.66
+      }
+    }
+  }
+}

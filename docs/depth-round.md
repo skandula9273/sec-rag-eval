@@ -258,6 +258,24 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
 - **Open:** Voyage finance-2 (domain-tuned) may lift tables further (optional next
   test). Cost: 3-large embeddings are ~6.5x 3-small ($0.13 vs $0.02 / 1M tokens).
 
+### Larger chunks over 3-large — bigger helps (1024: recall@5 0.64, tables 0.72)
+- **Result (2026-06-27, local exact, all 3-large):** recall@5 512=0.573, 768=0.60,
+  **1024=0.64**; recall@10 up to **0.767**; tables 0.62 -> 0.64 -> **0.72**; domain
+  0.44 -> **0.54**. Monotonic with chunk size.
+- **Real, not just metric inflation — the prose control proves it:** the worry was
+  that fuzzy >=0.5 overlap rewards bigger chunks (they hold more of the large gold
+  spans). But **prose stays flat** (0.66/0.64/0.66) — prose spans are small, so a
+  pure artifact would lift prose too. It doesn't. The gains land exactly on the
+  table-heavy categories: genuine retrieval improvement + some metric coupling.
+- **Tradeoffs (1024 isn't a free win):** coarser citations (~2x larger source,
+  worse for verify-the-line financial QA), more generation tokens/latency, some
+  recall@k inflation. **Side benefit:** fewer chunks (15k vs 26k) ~= half the
+  storage of 512 -> makes 3-large much more affordable to productionize.
+- **Best config so far: dense + 3-large + ~1024-token chunks** — recall@5 ~0.64,
+  tables ~0.72, vs the 0.44/0.32 baseline; approaching the 0.75 target. Going
+  larger (1536+) keeps chasing the metric at rising citation cost — 1024 is a
+  defensible stopping point.
+
 ### Generation — Claude Haiku 4.5, temperature 0, grounded prompt, numbered citations
 - **Alternatives:** Sonnet/Opus (stronger, slower, pricier).
 - **Tradeoff:** generation is **not** the bottleneck — faithfulness is already
