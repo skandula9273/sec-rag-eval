@@ -1,0 +1,73 @@
+{
+  "timestamp": "2026-06-28T12:43:29.896561+00:00",
+  "mode": "ablation_embed_dims",
+  "match_mode": "fuzzy",
+  "index": "local exact cosine",
+  "embedding_model": "text-embedding-3-large (truncated dims)",
+  "chunk_tokens": 512,
+  "n_questions": 150,
+  "n_chunks": 25992,
+  "note": "vector(1536) schema fits the Neon free tier; 3072 needs an upgrade",
+  "arms": {
+    "3072": {
+      "recall_at_k": {
+        "recall@5": 0.5733,
+        "recall@10": 0.6667
+      },
+      "mrr": 0.4032,
+      "per_category_recall@5": {
+        "domain-relevant": 0.44,
+        "metrics-generated": 0.62,
+        "novel-generated": 0.66
+      }
+    },
+    "1536": {
+      "recall_at_k": {
+        "recall@5": 0.5733,
+        "recall@10": 0.6667
+      },
+      "mrr": 0.39,
+      "per_category_recall@5": {
+        "domain-relevant": 0.44,
+        "metrics-generated": 0.6,
+        "novel-generated": 0.68
+      }
+    },
+    "1024": {
+      "recall_at_k": {
+        "recall@5": 0.5267,
+        "recall@10": 0.6667
+      },
+      "mrr": 0.3917,
+      "per_category_recall@5": {
+        "domain-relevant": 0.38,
+        "metrics-generated": 0.56,
+        "novel-generated": 0.64
+      }
+    },
+    "512": {
+      "recall_at_k": {
+        "recall@5": 0.5667,
+        "recall@10": 0.66
+      },
+      "mrr": 0.414,
+      "per_category_recall@5": {
+        "domain-relevant": 0.42,
+        "metrics-generated": 0.6,
+        "novel-generated": 0.68
+      }
+    },
+    "256": {
+      "recall_at_k": {
+        "recall@5": 0.5667,
+        "recall@10": 0.6333
+      },
+      "mrr": 0.3666,
+      "per_category_recall@5": {
+        "domain-relevant": 0.4,
+        "metrics-generated": 0.6,
+        "novel-generated": 0.7
+      }
+    }
+  }
+}

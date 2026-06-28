@@ -276,6 +276,24 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
   larger (1536+) keeps chasing the metric at rising citation cost — 1024 is a
   defensible stopping point.
 
+### Embedding dimensions — 3-large@1536 keeps the win (free-tier productionization)
+- **Problem:** 3-large@3072 is 2x storage; 3-large + 1024 chunks ~= 525 MB, just
+  over the 512 MB Neon free tier (so it looked like adoption needed a paid tier).
+- **Matryoshka:** OpenAI 3-* embeddings are trained so truncating to the first N
+  dims + renormalizing == the native reduced-`dimensions` output. Tested by
+  truncating the cached 3-large@3072 vectors (512-chunk corpus) — near-free.
+- **Result (2026-06-28):** **3-large@1536 == 3-large@3072** on recall@5 (0.573)
+  and recall@10 (0.667); tables 0.62 vs 0.60 (noise). Even @256 holds ~0.567 —
+  still far above 3-small@1536's 0.44. The recall gain lives in the first 1536 dims.
+- **Consequence:** productionize 3-large at **1536 dims** -> SAME `vector(1536)`
+  schema, SAME storage as today -> **fits the free tier, no upgrade, no schema
+  change.** With 1024-token chunks (fewer rows) the best config is ~320 MB.
+- **Decision — the deployable winning config: dense + text-embedding-3-large
+  @1536-dim + 1024-token chunks** (recall@5 ~0.64) at ZERO infra cost. Needs
+  embed.py to pass the OpenAI `dimensions` param + a destructive re-ingest to
+  replace the 3-small corpus. Depth-round lesson: a constraint ("needs a paid DB")
+  dissolved under one more cheap measurement — check before you spend.
+
 ### Generation — Claude Haiku 4.5, temperature 0, grounded prompt, numbered citations
 - **Alternatives:** Sonnet/Opus (stronger, slower, pricier).
 - **Tradeoff:** generation is **not** the bottleneck — faithfulness is already
