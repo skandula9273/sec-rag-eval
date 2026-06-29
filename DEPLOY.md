@@ -45,10 +45,19 @@ gcloud run deploy sec-rag-api \
   --allow-unauthenticated \
   --memory 1Gi \
   --timeout 60 \
-  --set-env-vars "OPENAI_API_KEY=sk-...,ANTHROPIC_API_KEY=sk-ant-...,DATABASE_URL=postgresql://...,SEC_RAG_API_KEY=<the key from step 1>"
+  --set-env-vars "OPENAI_API_KEY=sk-...,ANTHROPIC_API_KEY=sk-ant-...,DATABASE_URL=postgresql://...,SEC_RAG_API_KEY=<the key from step 1>,SEC_RAG_CONFIG=configs/v2.yaml"
 ```
 
 Notes:
+- **`SEC_RAG_CONFIG` must match the ingested corpus.** The API embeds the query
+  with the config's embedding model; if it differs from the model the corpus was
+  embedded with, the query and chunk vectors live in different spaces and
+  retrieval is incoherent. The live corpus is `configs/v2.yaml` (3-large@1536 +
+  1024 chunks). To repoint an existing service to a new config without re-supplying
+  secrets: `gcloud run deploy sec-rag-api --source . --region us-east1
+  --update-env-vars SEC_RAG_CONFIG=configs/v2.yaml --quiet` (`--update-env-vars`
+  preserves the other env vars; `--source .` rebuilds so the config file is in the
+  image).
 - `--source .` uses `Dockerfile` (the API) automatically and builds it with
   Cloud Build — which produces an **amd64** image, exactly what Cloud Run needs.
 - First `--source` deploy will try to create an Artifact Registry repo and
