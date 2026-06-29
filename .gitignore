@@ -29,3 +29,10 @@ htmlcov/
 
 # Temporary local study aid — not part of the repo.
 V0_STUDY_GUIDE.md
+V0_STUDY_GUIDE.dotx
+
+# Local cruft (design refs, shell history, local agent settings) — not the repo.
+*.heic
+.Rhistory
+.claude/
+.streamlit/credentials.toml

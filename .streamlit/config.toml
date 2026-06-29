@@ -1,0 +1,6 @@
+# Streamlit config for the demo. Theme can be customized under [theme] later.
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true

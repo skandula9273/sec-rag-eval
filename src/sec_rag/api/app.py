@@ -18,6 +18,7 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from sec_rag.config import load_config
@@ -59,6 +60,19 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="sec-filings-rag", version="0.0.0", lifespan=lifespan)
+
+# The static GitHub Pages frontend (web/) calls /query and /query/stream from the
+# browser, so the API must send CORS headers or the browser blocks the response.
+# Origins are unauthenticated-safe to open: /query is still gated by the X-API-Key
+# header (require_api_key), which the browser sends and CORS must allow. No cookies
+# are used, so allow_credentials stays False and "*" origins are fine.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key"],
+)
 
 
 @app.get("/health")
