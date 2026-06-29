@@ -41,8 +41,7 @@ CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw
 CREATE INDEX IF NOT EXISTS documents_ticker_idx ON documents (ticker);
 CREATE INDEX IF NOT EXISTS documents_filing_idx ON documents (filing_type, filing_date);
 
--- Full-text (lexical) index for V1 hybrid retrieval. GIN over the english
--- tsvector of chunk content; matched by ts_rank_cd in retrieve/lexical.py.
--- (pg_search/BM25 is deprecated on Neon, so hybrid's lexical half uses core FTS.)
-CREATE INDEX IF NOT EXISTS chunks_content_fts
-    ON chunks USING gin (to_tsvector('english', content));
+-- NOTE: the chunks_content_fts GIN index (V1 hybrid's lexical half) was DROPPED.
+-- Hybrid retrieval regressed and was retired (see docs/depth-round.md), so the
+-- index was dead weight on the storage-constrained free tier. retrieve/lexical.py
+-- still works without it (slower seq scan) if hybrid is ever re-enabled.

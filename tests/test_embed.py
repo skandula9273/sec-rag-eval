@@ -69,6 +69,21 @@ def test_gives_up_after_max_retries(monkeypatch):
         e.embed(["a"])
 
 
+def test_passes_dimensions_for_3_models():
+    captured = {}
+
+    class Embeddings:
+        def create(self, model, input, **kwargs):
+            captured.update(kwargs)
+            return _Resp([_Emb(i, [0.0] * 1536) for i, _ in enumerate(input)])
+
+    e = _embedder()
+    e.model, e.dim = "text-embedding-3-large", 1536  # Matryoshka-truncated
+    e.client = type("C", (), {"embeddings": Embeddings()})()
+    e.embed(["a"])
+    assert captured.get("dimensions") == 1536  # 3-large requested at 1536-d
+
+
 def test_fails_fast_on_insufficient_quota(monkeypatch):
     monkeypatch.setattr(embmod.time, "sleep", lambda s: None)
     calls = {"n": 0}

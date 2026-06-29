@@ -1,0 +1,41 @@
+# V2 — the winning, deployable retrieval config (fits the Neon free tier).
+#
+# Result of the ablation program (see docs/depth-round.md + design-doc
+# amendments): text-embedding-3-large at 1536 dims (Matryoshka truncation: same
+# recall as 3072-d, same vector(1536) schema, same storage as 3-small) + 1024-
+# token chunks. recall@5 0.44 -> ~0.64, tables 0.32 -> ~0.72 vs the v0 baseline
+# (dense / 3-small / 512). Dense only: hybrid + reranker were measured and retired.
+#
+# One variable per file kept the ablations honest; this file is the *combination*
+# of the two winning variables (model + chunk size), now the production default.
+
+corpus: financebench
+
+chunking:
+  strategy: token
+  max_tokens: 1024          # larger chunks help on table evidence (vs 512)
+  overlap_tokens: 64
+  encoder: cl100k_base
+
+embedding:
+  provider: openai
+  model: text-embedding-3-large
+  dim: 1536                 # Matryoshka-truncated; keeps the gain at 3-small storage
+  batch_size: 128
+
+retrieval:
+  method: dense             # hybrid + reranker retired (regressed); dense wins
+  top_k: 5
+  distance: cosine
+
+generation:
+  provider: anthropic
+  model: claude-haiku-4-5
+  max_tokens: 1024
+  temperature: 0.0
+
+eval:
+  dataset: PatronusAI/financebench
+  recall_ks: [5, 10]
+  seed: 13
+  faithfulness: true

@@ -43,10 +43,16 @@ class Embedder:
         """
         from openai import APIConnectionError, APITimeoutError, RateLimitError
 
+        kwargs = {"model": self.model, "input": batch}
+        # text-embedding-3-* support Matryoshka truncation via `dimensions`: this
+        # is how 3-large is requested at 1536-d (same recall as 3072, but fits the
+        # vector(1536) schema + Neon free tier). No-op for 3-small (native 1536).
+        if self.model.startswith("text-embedding-3"):
+            kwargs["dimensions"] = self.dim
         delay = 2.0
         for attempt in range(_MAX_RETRIES + 1):
             try:
-                return self.client.embeddings.create(model=self.model, input=batch)
+                return self.client.embeddings.create(**kwargs)
             except (RateLimitError, APITimeoutError, APIConnectionError) as e:
                 if "insufficient_quota" in str(e):  # billing, not transient -> fail fast
                     raise
