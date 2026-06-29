@@ -1,15 +1,19 @@
 :root {
-  --bg: #05060c;
-  --panel: #0d1119;
-  --panel-2: #111726;
-  --border: #1e2536;
-  --text: #e8edf6;
-  --muted: #8a93a6;
-  --accent: #3b82f6;
-  --accent-2: #60a5fa;
-  --glow: #2f6bff;
+  --bg: #f7fffd;
+  --panel: #ffffff;
+  --panel-2: #f0fdfa;
+  --border: #d7eee9;
+  --text: #0f2e2a;
+  --muted: #5b7a74;
+  --teal: #14b8a6;
+  --cyan: #06b6d4;
+  --blue: #3b82f6;
+  --green: #10b981;
+  --accent: #0ea5a5;
+  --accent-2: #22d3c5;
   --radius: 16px;
   --maxw: 760px;
+  --shadow: 0 18px 50px rgba(13, 148, 136, 0.12);
 }
 
 * { box-sizing: border-box; }
@@ -23,35 +27,30 @@ html, body {
   min-height: 100vh;
 }
 
-/* --- Earth-horizon glow at the bottom --- */
+/* --- Uplifting aurora bloom rising from the bottom --- */
 .horizon {
   position: fixed;
-  left: 50%;
-  bottom: -82vw;
-  transform: translateX(-50%);
-  width: 200vw;
-  height: 200vw;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at center, #060810 60%, #0a1020 100%);
-  box-shadow:
-    inset 0 6px 40px rgba(147, 197, 253, 0.10),
-    0 -2px 0 0 rgba(147, 197, 253, 0.85),
-    0 -10px 60px 6px rgba(59, 130, 246, 0.55),
-    0 -40px 160px 30px rgba(47, 107, 255, 0.30);
+  left: 0; right: 0; bottom: 0;
+  height: 62vh;
+  background:
+    radial-gradient(62% 90% at 28% 125%, rgba(45, 212, 191, 0.40), transparent 62%),
+    radial-gradient(62% 90% at 72% 125%, rgba(56, 189, 248, 0.34), transparent 62%),
+    radial-gradient(54% 80% at 50% 135%, rgba(52, 211, 153, 0.36), transparent 62%);
+  filter: blur(8px);
   z-index: 0;
   pointer-events: none;
 }
-/* soft blue bloom rising off the horizon */
+/* a soft bright crest where the bloom meets the page */
 .horizon::after {
   content: "";
   position: absolute;
   left: 50%;
-  top: -3vw;
+  bottom: 30vh;
   transform: translateX(-50%);
-  width: 70vw;
-  height: 26vw;
-  background: radial-gradient(ellipse at center bottom, rgba(80, 150, 255, 0.45), transparent 70%);
-  filter: blur(30px);
+  width: 80vw;
+  height: 16vw;
+  background: radial-gradient(ellipse at center bottom, rgba(255, 255, 255, 0.7), transparent 70%);
+  filter: blur(24px);
 }
 
 /* --- Top bar --- */
@@ -66,18 +65,19 @@ html, body {
 .badge {
   font-size: 12.5px;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.7);
   border: 1px solid var(--border);
   padding: 7px 14px;
   border-radius: 999px;
   backdrop-filter: blur(6px);
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.06);
 }
-.badge::first-letter { color: #34d399; }  /* the live dot */
+.badge::first-letter { color: var(--green); }  /* the live dot */
 .icon-btn {
   position: absolute;
   right: 18px;
   top: 18px;
-  background: transparent;
+  background: #fff;
   border: 1px solid var(--border);
   color: var(--muted);
   width: 34px; height: 34px;
@@ -85,7 +85,7 @@ html, body {
   cursor: pointer;
   font-size: 15px;
 }
-.icon-btn:hover { color: var(--text); border-color: var(--accent); }
+.icon-btn:hover { color: var(--accent); border-color: var(--accent); }
 
 /* --- Hero --- */
 .hero {
@@ -101,10 +101,11 @@ html, body {
   font-weight: 700;
   letter-spacing: -0.02em;
   margin: 0 0 10px;
+  color: #0c2b27;
 }
 .headline em {
   font-style: italic;
-  background: linear-gradient(90deg, #93c5fd, #c7d8ff);
+  background: linear-gradient(90deg, var(--teal), var(--cyan) 45%, var(--blue));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -125,9 +126,9 @@ html, body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 10px 10px 10px 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  box-shadow: var(--shadow);
 }
-.ask:focus-within { border-color: var(--accent); }
+.ask:focus-within { border-color: var(--accent-2); box-shadow: 0 0 0 4px rgba(34, 211, 197, 0.15), var(--shadow); }
 .ask-input {
   flex: 1;
   background: transparent;
@@ -137,7 +138,7 @@ html, body {
   font-size: 15.5px;
   padding: 8px 4px;
 }
-.ask-input::placeholder { color: #5b6479; }
+.ask-input::placeholder { color: #9bb5b0; }
 .ask-btn {
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
   color: white;
@@ -148,9 +149,10 @@ html, body {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  box-shadow: 0 6px 16px rgba(14, 165, 165, 0.3);
 }
-.ask-btn:hover { filter: brightness(1.08); }
-.ask-btn:disabled { opacity: 0.5; cursor: default; }
+.ask-btn:hover { filter: brightness(1.05); }
+.ask-btn:disabled { opacity: 0.5; cursor: default; box-shadow: none; }
 
 /* --- Quick links --- */
 .quicklinks {
@@ -160,7 +162,7 @@ html, body {
   margin: 18px 0 26px;
 }
 .ghost-btn {
-  background: rgba(255, 255, 255, 0.02);
+  background: #fff;
   border: 1px solid var(--border);
   color: var(--muted);
   border-radius: 10px;
@@ -169,7 +171,7 @@ html, body {
   cursor: pointer;
   text-decoration: none;
 }
-.ghost-btn:hover { color: var(--text); border-color: var(--accent); }
+.ghost-btn:hover { color: var(--accent); border-color: var(--accent-2); }
 
 /* --- Suggestion chips --- */
 .chips {
@@ -179,16 +181,16 @@ html, body {
 }
 .chip {
   text-align: left;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.8);
   border: 1px solid var(--border);
-  color: #b7c0d4;
+  color: #2f5651;
   border-radius: 12px;
   padding: 12px 14px;
   font-size: 13px;
   cursor: pointer;
   line-height: 1.35;
 }
-.chip:hover { border-color: var(--accent); color: var(--text); background: rgba(59, 130, 246, 0.06); }
+.chip:hover { border-color: var(--accent-2); color: var(--text); background: var(--panel-2); }
 
 /* --- Result panel --- */
 .result {
@@ -203,13 +205,15 @@ html, body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 22px;
+  box-shadow: var(--shadow);
 }
 .result-head { display: flex; align-items: center; justify-content: space-between; }
-.result-head h2 { margin: 0; font-size: 18px; }
+.result-head h2 { margin: 0; font-size: 18px; color: #0c2b27; }
 .faith-badge {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--accent);
   border: 1px solid var(--border);
+  background: var(--panel-2);
   border-radius: 999px;
   padding: 4px 10px;
 }
@@ -219,8 +223,8 @@ html, body {
   font-size: 15px;
   white-space: pre-wrap;
 }
-.answer .cite { color: var(--accent-2); font-weight: 600; }
-.error { color: #f87171; font-size: 14px; margin-top: 8px; }
+.answer .cite { color: var(--blue); font-weight: 600; }
+.error { color: #dc2626; font-size: 14px; margin-top: 8px; }
 
 .sources-title { font-size: 14px; color: var(--muted); margin: 18px 0 8px; }
 .sources { display: flex; flex-direction: column; gap: 8px; }
@@ -237,11 +241,11 @@ html, body {
   border-radius: 999px;
   margin-right: 8px;
 }
-.tag.cited { background: rgba(59, 130, 246, 0.18); color: var(--accent-2); }
-.tag.retr { background: rgba(255, 255, 255, 0.05); color: var(--muted); }
+.tag.cited { background: rgba(20, 184, 166, 0.16); color: #0d9488; }
+.tag.retr { background: rgba(15, 46, 42, 0.06); color: var(--muted); }
 .source .doc { font-weight: 600; font-size: 13.5px; }
 .source .meta { color: var(--muted); font-size: 12px; }
-.source .excerpt { color: #aab3c6; font-size: 12.5px; margin-top: 6px; line-height: 1.45; }
+.source .excerpt { color: #466b65; font-size: 12.5px; margin-top: 6px; line-height: 1.45; }
 
 .metrics {
   display: flex;
@@ -259,7 +263,7 @@ html, body {
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(2, 4, 10, 0.7);
+  background: rgba(8, 40, 36, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -272,8 +276,9 @@ html, body {
   border-radius: var(--radius);
   padding: 24px;
   width: min(440px, 92vw);
+  box-shadow: var(--shadow);
 }
-.modal-card h2 { margin: 0 0 8px; font-size: 18px; }
+.modal-card h2 { margin: 0 0 8px; font-size: 18px; color: #0c2b27; }
 .modal-note { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin: 0 0 16px; }
 .modal-card label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 14px; }
 .modal-card input {
