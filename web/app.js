@@ -22,6 +22,9 @@ function openModal() {
 }
 function closeModal() { $("modal").hidden = true; }
 
+// A question the user tried before entering a key — re-run it after they save.
+let pendingQuestion = null;
+
 $("settingsBtn").onclick = openModal;
 $("settingsBtn2").onclick = openModal;
 $("closeModal").onclick = closeModal;
@@ -30,6 +33,10 @@ $("saveKey").onclick = () => {
   const url = $("urlInput").value.trim();
   localStorage.setItem("secrag_api", url || DEFAULT_API);
   closeModal();
+  // Forward motion: if a question was waiting on the key, run it now.
+  const q = pendingQuestion || $("queryInput").value;
+  pendingQuestion = null;
+  if (q && q.trim()) ask(q);
 };
 
 // --- Render helpers ---
@@ -77,7 +84,12 @@ let busy = false;
 
 async function ask(question) {
   if (busy || !question.trim()) return;
-  if (!getKey() && !IS_LOCAL) { openModal(); return; }  // local API guard is off
+  if (!getKey() && !IS_LOCAL) {        // local API guard is off, so only gate remotely
+    pendingQuestion = question;
+    $("queryInput").value = question;  // keep it visible behind the modal
+    openModal();
+    return;
+  }
   busy = true;
 
   $("result").hidden = false;
