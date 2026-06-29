@@ -312,6 +312,23 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
   credits; latency (p95) untouched. The "deployed == measured" rule also means the
   live Cloud Run service must be repointed to `SEC_RAG_CONFIG=configs/v2.yaml`.
 
+### Latency — generation is the wall; faithfulness judge taken off the API path
+- **Measured breakdown (v2, per /query, 5-q sample):** retrieval ~2.2 s (19%),
+  generation ~5.9 s (52%), faithfulness judge ~3.3 s (29%). Total ~11.4 s.
+- **Honest finding:** **p95 e2e <2.5 s (the design-doc target) is NOT reachable
+  with synchronous Haiku generation** — a grounded answer over 5×1024-token chunks
+  is ~6 s on its own. The target was set without accounting for generation cost.
+  Retrieval latency *is* met (~0.4–2 s). This is a target-mis-specification caught
+  by measuring before optimizing — exactly the depth-round move.
+- **Shipped:** the faithfulness judge (a 2nd LLM call) is now **off the /query
+  critical path by default** (`with_faithfulness` opt-in on the request; falls back
+  to `cfg.eval.faithfulness` so eval still computes the committed number; the demo
+  opts in for the live badge). ~29% off request latency (~11 s → ~8 s).
+- **Remaining latency levers:** (1) **streaming** — time-to-first-token <1 s, the
+  real UX fix for a generation-bound RAG; (2) **connection pool** (concurrency, the
+  known-debt single-connection item). The <2.5 s target should be reframed as TTFT
+  or retrieval-latency, not e2e-with-generation.
+
 ### Generation — Claude Haiku 4.5, temperature 0, grounded prompt, numbered citations
 - **Alternatives:** Sonnet/Opus (stronger, slower, pricier).
 - **Tradeoff:** generation is **not** the bottleneck — faithfulness is already

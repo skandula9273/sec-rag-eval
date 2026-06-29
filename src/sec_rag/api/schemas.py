@@ -19,6 +19,9 @@ class QueryRequest(BaseModel):
     # into the generation prompt (Anthropic 413 RequestTooLargeError). 1..50
     # comfortably covers recall@5/@10 and any sane ablation. None -> config default.
     top_k: int | None = Field(default=None, ge=1, le=50)
+    # The faithfulness judge is a second LLM call (~29% of request latency). Off by
+    # default so /query returns the answer fast; set true for the live badge.
+    with_faithfulness: bool = False
 
 
 class Citation(BaseModel):

@@ -71,4 +71,6 @@ def query(req: QueryRequest) -> QueryResponse:
         raise HTTPException(status_code=503, detail=f"engine not ready: {_state['error']}")
     if not req.query.strip():
         raise HTTPException(status_code=422, detail="query must not be empty")
-    return engine.run(req.query, top_k=req.top_k).response
+    return engine.run(
+        req.query, top_k=req.top_k, with_faithfulness=req.with_faithfulness
+    ).response

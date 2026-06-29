@@ -115,7 +115,9 @@ class QueryEngine:
         retrieval_ms = int((time.perf_counter() - t0) * 1000)
         return retrieved, retrieval_ms
 
-    def run(self, query: str, top_k: int | None = None) -> PipelineResult:
+    def run(
+        self, query: str, top_k: int | None = None, with_faithfulness: bool | None = None
+    ) -> PipelineResult:
         trace_id = uuid.uuid4().hex
 
         retrieved, retrieval_ms = self.retrieve(query, top_k)
@@ -124,12 +126,14 @@ class QueryEngine:
         gen = generate_answer(query, retrieved, self.cfg.generation, self.secrets)
         generation_ms = int((time.perf_counter() - t1) * 1000)
 
-        # Faithfulness badge: one judge call grading how grounded the answer is in
-        # the retrieved sources. Off by default (eval.faithfulness=false) so it
-        # stays off the critical path unless enabled; see generate/faithfulness.py.
+        # Faithfulness judge: a SECOND LLM call (~29% of request latency, measured).
+        # Kept OFF the API critical path by default: with_faithfulness=None falls
+        # back to cfg.eval.faithfulness (true in eval -> the committed number; the
+        # API passes False for a fast answer). Callers wanting the live badge opt in.
+        judge = self.cfg.eval.faithfulness if with_faithfulness is None else with_faithfulness
         faithfulness = None
         faithfulness_ms = None
-        if self.cfg.eval.faithfulness:
+        if judge:
             t2 = time.perf_counter()
             fr = score_faithfulness(gen.text, retrieved, self.cfg.generation, self.secrets)
             faithfulness = fr.score
