@@ -28,14 +28,18 @@ read the code and scrutinize the numbers. Treat every output that way.
   | Metric | v0 (3-small/512) | **v2 (3-large@1536/1024)** | V2 target |
   |---|---|---|---|
   | recall@5 | 0.44 | **0.64** | 0.75 |
-  | recall@10 | 0.54 | **0.747** | — |
+  | recall@10 | 0.54 | **0.74** | — |
   | MRR | 0.317 | **0.492** | — |
   | tables@5 | 0.32 | **0.70** | — |
-  | faithfulness | 0.941 | pending Anthropic | 0.80 ✓ (v0) |
-  | cost / query | $0.0063 | pending | <$0.005 |
-  | p95 latency (e2e) | ~15.6 s | untouched | <2.5 s ✗ |
+  | faithfulness | 0.941 | **0.929** ✓ | 0.80 |
+  | cost / query | $0.0063 | **$0.009** (eval; API ~$0.005–6) | <$0.005 |
+  | p95 latency (e2e) | ~15.6 s | **~15.3 s** (eval w/ judge; API faster) | <2.5 s ✗ |
 
-  recall@5 0.44 → **0.64** and tables 0.32 → **0.70** came from ONE lever — the
+  Full v2 baseline: `eval_results/financebench_20260629T193049Z.json` (150 q,
+  full pipeline, 0 errors). Cost/latency above are EVAL numbers (top_k=10 + judge
+  on); the **live API** runs top_k=5 + judge off (faithfulness opt-in), so it is
+  cheaper + faster. recall@5 0.44 → **0.64** and tables 0.32 → **0.70** came from
+  ONE lever — the
   embedding model (3-large, Matryoshka-truncated to 1536-d so it fits `vector(1536)`
   and the free tier) + larger (1024) chunks. recall@10 0.747 is essentially at the
   0.75 target. Five other levers (hybrid, reranker ×2, table-extraction, smaller

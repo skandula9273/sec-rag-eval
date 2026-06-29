@@ -308,9 +308,13 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
   on a near-full Neon DB must `TRUNCATE` first — per-doc DELETE+INSERT leaves dead
   tuples that blow the 512 MB cap mid-swap. (2) Long ingests need `--resume` — a
   transient connection drop shouldn't force re-embedding the whole corpus.
-- **Open:** the full eval (faithfulness + cost via generation) needs Anthropic
-  credits; latency (p95) untouched. The "deployed == measured" rule also means the
-  live Cloud Run service must be repointed to `SEC_RAG_CONFIG=configs/v2.yaml`.
+- **Full v2 baseline (2026-06-29, 150 q, full pipeline, 0 errors):** recall@5 0.64,
+  recall@10 0.74, **faithfulness 0.929** (holds above the 0.80 target — generation
+  quality survived the retrieval change), cost **$0.009/q**, latency p95 15.3 s.
+  Caveat (rule #2): the eval runs top_k=10 + judge on, so its cost/latency
+  *overstate* production — the live API (top_k=5, judge off) is ~$0.005–6 and
+  faster. The larger 1024-chunks raised cost vs v0 ($0.0063) — an honest tradeoff
+  of the recall win.
 
 ### Latency — generation is the wall; faithfulness judge taken off the API path
 - **Measured breakdown (v2, per /query, 5-q sample):** retrieval ~2.2 s (19%),
