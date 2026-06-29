@@ -12,37 +12,41 @@ underneath**, not the chatbot. Numbers must be reproducible and honest.
 Owner: Sai (Santosh Kandula). Audience for the work: engineering leads who will
 read the code and scrutinize the numbers. Treat every output that way.
 
-## Where we are now (read before planning) — updated 2026-06-26
+## Where we are now (read before planning) — updated 2026-06-29
 
-- Phase: **V1.1 complete — hybrid tested and retired; the next lever is table
-  extraction.** **V0 is complete and deployed** — landed ahead of the June 14
-  deadline.
-- **Live services are wired.** Neon Postgres + pgvector is up (`vector` extension
-  enabled); OpenAI + Anthropic keys work; the FinanceBench corpus is **ingested:
-  84 documents, 25,992 chunks**. The API + Streamlit demo are deployed on Cloud
-  Run (see `DEPLOY.md` for live URLs).
-- **Committed V0 baseline** — `eval_results/financebench_20260605T020304Z.json`
-  (150 questions, dense, fuzzy(0.5) match):
+- Phase: **V2 retrieval config productionized.** The ablation program found the
+  recall lever (the embedding model) and it is now the LIVE config. V0 and the
+  full retrieval-ablation program are complete and committed.
+- **Live config = `configs/v2.yaml`: dense + text-embedding-3-large @1536-d +
+  1024-token chunks.** Corpus re-ingested into Neon: **84 docs, 15,192 chunks,
+  274 MB** (fits the free tier). ⚠️ The deployed Cloud Run API must set
+  `SEC_RAG_CONFIG=configs/v2.yaml` — the query and corpus embedding model must
+  match or retrieval is incoherent. See `DEPLOY.md`.
+- **Current baseline** — `eval_results/financebench_20260629T160938Z.json`
+  (v2, 150 q, dense, retrieval-only, fuzzy(0.5)), vs the committed v0 baseline:
 
-  | Metric | Measured | V0 floor | V2 target | Verdict |
-  |---|---|---|---|---|
-  | recall@5 | **0.44** | 0.55 | 0.75 | ✗ below floor |
-  | recall@10 | 0.54 | — | — | — |
-  | MRR | 0.317 | — | — | — |
-  | faithfulness | **0.941** | 0.65 | 0.80 | ✓ |
-  | cost / query | **$0.0063** | <$0.01 | <$0.005 | ✓ |
-  | p95 latency | **~15.6 s** | <5 s | <2.5 s | ✗ over floor |
+  | Metric | v0 (3-small/512) | **v2 (3-large@1536/1024)** | V2 target |
+  |---|---|---|---|
+  | recall@5 | 0.44 | **0.64** | 0.75 |
+  | recall@10 | 0.54 | **0.747** | — |
+  | MRR | 0.317 | **0.492** | — |
+  | tables@5 | 0.32 | **0.70** | — |
+  | faithfulness | 0.941 | pending Anthropic | 0.80 ✓ (v0) |
+  | cost / query | $0.0063 | pending | <$0.005 |
+  | p95 latency (e2e) | ~15.6 s | untouched | <2.5 s ✗ |
 
-  Per-category recall@5: novel/prose **0.66**, metrics-generated (tables/numbers)
-  **0.32**, domain-relevant **0.34**. The prose-vs-tables gap is the central
-  finding and the V1 hypothesis: dense retrieval fails on financial tables/numbers
-  (cosine is semantic not numeric; pypdf flattens tables).
+  recall@5 0.44 → **0.64** and tables 0.32 → **0.70** came from ONE lever — the
+  embedding model (3-large, Matryoshka-truncated to 1536-d so it fits `vector(1536)`
+  and the free tier) + larger (1024) chunks. recall@10 0.747 is essentially at the
+  0.75 target. Five other levers (hybrid, reranker ×2, table-extraction, smaller
+  chunks) were measured and rejected — full ablation table in `docs/depth-round.md`.
 
-- **Two V0 floors are missed (recall, latency).** That is honest and expected —
-  V0 is the *baseline to beat*, not the finish line. V1 attacks recall; latency
-  is a separate engineering concern (see Known debt below).
-- Authoritative current state: this section + `docs/v1-plan.md`. The dated
-  session summaries (`docs/session-summary-2026-05-*.md`) are historical.
+- **Remaining gaps:** (1) **latency** — p95 ~15.6 s vs <2.5 s, untouched; the free
+  engineering track (connection pool + faithfulness judge off the request path).
+  (2) The **full v2 eval** (recall + faithfulness + cost through generation) is
+  pending Anthropic credits; only retrieval-only recall is measured so far.
+- Authoritative current state: this section + `docs/depth-round.md` (the ablation
+  record). The dated session summaries are historical.
 
 ### V1.1 status — hybrid tested and RETIRED (dense is the ceiling)
 

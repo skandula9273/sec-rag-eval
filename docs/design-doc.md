@@ -415,6 +415,31 @@ localizes it to retrieval ranking + recall, not parsing. The diagnostic-first
 checkpoint turned a wrong committed hypothesis into a ~5-minute correction instead
 of a wasted full-corpus re-embed. Full detail: `docs/depth-round.md`.
 
+### 2026-06-29 — V2 retrieval config adopted: 3-large@1536 + 1024 chunks (free tier)
+
+The locked V0 stack pinned `text-embedding-3-small` (1536-d) + 512-token chunks.
+The ablation program (docs/depth-round.md) measured the recall lever and it is
+the **embedding model**, not any retrieval-method add-on.
+
+**Amendment — the production retrieval config is now `configs/v2.yaml`:** dense +
+**text-embedding-3-large at 1536 dims** (OpenAI Matryoshka `dimensions=1536`, which
+matches `@3072` on recall while keeping the existing `vector(1536)` schema + Neon
+free tier) + **1024-token chunks**. v0.yaml stays as the historical baseline.
+
+**Measured (retrieval-only, FinanceBench 150):** recall@5 0.44 → **0.64**,
+recall@10 0.54 → **0.747**, tables 0.32 → **0.70**, on a 15,192-chunk / 274 MB
+corpus. Deployed == measured (same QueryEngine). The full eval (faithfulness +
+cost) is pending Anthropic credits.
+
+**Retired along the way (measured, not assumed):** hybrid (dense+lexical RRF),
+cross-encoder reranker (over both 3-small and 3-large), table extraction
+(pdfplumber — evidence already survives pypdf), and 256-token chunks. All
+regressed or were flat vs dense; see the ablation table in depth-round.md.
+
+**Rationale:** rule #6 (one variable at a time) and rule #2 (honest numbers) —
+the embedding model is the lever the data pointed to, and 1536-d Matryoshka
+truncation makes the win deployable at zero infra cost.
+
 ---
 
 *Living document. Versioned in repo. Updates noted at top with date and rationale.*

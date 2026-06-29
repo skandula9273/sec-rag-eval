@@ -70,7 +70,21 @@ def _insert_chunks(cur, doc_id: int, chunks: list[Chunk], embeddings: list[list[
     )
 
 
-def ingest(cfg: Config, data_dir: str = "data/", secrets: Secrets | None = None) -> dict:
+def _already_ingested(cur, doc_name: str) -> bool:
+    cur.execute(
+        "SELECT 1 FROM chunks c JOIN documents d ON d.id = c.doc_id "
+        "WHERE d.doc_name = %s LIMIT 1",
+        (doc_name,),
+    )
+    return cur.fetchone() is not None
+
+
+def ingest(
+    cfg: Config,
+    data_dir: str = "data/",
+    secrets: Secrets | None = None,
+    skip_existing: bool = False,
+) -> dict:
     secrets = secrets or Secrets()
     secrets.require("openai_api_key", "database_url")
 
@@ -78,7 +92,7 @@ def ingest(cfg: Config, data_dir: str = "data/", secrets: Secrets | None = None)
     embedder = Embedder(cfg.embedding, secrets)
 
     doc_names = sorted({q.doc_name for q in load_questions(cfg.eval.dataset)})
-    stats = {"documents": 0, "chunks": 0, "skipped": []}
+    stats = {"documents": 0, "chunks": 0, "skipped": [], "already_present": 0}
 
     with connect(secrets) as conn:
         for doc_name in doc_names:
@@ -86,6 +100,15 @@ def ingest(cfg: Config, data_dir: str = "data/", secrets: Secrets | None = None)
             if pdf is None:
                 stats["skipped"].append(doc_name)
                 continue
+            # Resume: skip docs already loaded so a transient drop mid-run doesn't
+            # force re-embedding the whole corpus. Safe because a config change
+            # starts from an empty table (TRUNCATE); within one config, existing
+            # chunks are already the right ones.
+            if skip_existing:
+                with conn.cursor() as cur:
+                    if _already_ingested(cur, doc_name):
+                        stats["already_present"] += 1
+                        continue
             pages = extract_pages(pdf)
             chunks = chunk_document(
                 pages,
@@ -111,12 +134,19 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Ingest FinanceBench PDFs into pgvector")
     ap.add_argument("--config", default="configs/v0.yaml")
     ap.add_argument("--data", default="data/")
+    ap.add_argument(
+        "--resume",
+        action="store_true",
+        help="skip docs already loaded (resume after an interruption; do NOT use "
+        "across a config change without TRUNCATE first)",
+    )
     args = ap.parse_args()
     cfg = load_config(args.config)
-    stats = ingest(cfg, data_dir=args.data)
+    stats = ingest(cfg, data_dir=args.data, skip_existing=args.resume)
     print(
-        f"Ingested {stats['documents']} docs / {stats['chunks']} chunks. "
-        f"Skipped (no PDF / no text): {len(stats['skipped'])}."
+        f"Ingested {stats['documents']} docs / {stats['chunks']} chunks "
+        f"(skipped {stats['already_present']} already present). "
+        f"Missing (no PDF / no text): {len(stats['skipped'])}."
     )
     if stats["skipped"]:
         print("  missing:", ", ".join(stats["skipped"][:10]),

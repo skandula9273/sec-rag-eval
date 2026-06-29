@@ -294,6 +294,24 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
   replace the 3-small corpus. Depth-round lesson: a constraint ("needs a paid DB")
   dissolved under one more cheap measurement — check before you spend.
 
+### Productionized — v2 baseline 0.64 (deployed == measured)
+- Adopted the winning config in the live system: dense + text-embedding-3-large
+  @1536-d + 1024-token chunks (`configs/v2.yaml`). Re-ingested into Neon: 15,192
+  chunks, 84 docs, **274 MB** — fits the free tier (vs the 512 cap), confirming the
+  Matryoshka path needs no upgrade.
+- **New baseline (v2, retrieval-only, 150 q, fuzzy, 0 errors):** recall@5 **0.64**
+  (v0 0.44), recall@10 **0.747** (0.54), MRR **0.492** (0.317); tables **0.70**
+  (0.32), domain **0.56** (0.34), prose 0.66 (flat). Measured through the *same*
+  QueryEngine the API uses — the deployed system IS this number. Reproduces the
+  offline ablation -> productionization validated; recall@10 ~= the 0.75 target.
+- **Ops lessons (both surfaced as failures, both fixed):** (1) a full corpus swap
+  on a near-full Neon DB must `TRUNCATE` first — per-doc DELETE+INSERT leaves dead
+  tuples that blow the 512 MB cap mid-swap. (2) Long ingests need `--resume` — a
+  transient connection drop shouldn't force re-embedding the whole corpus.
+- **Open:** the full eval (faithfulness + cost via generation) needs Anthropic
+  credits; latency (p95) untouched. The "deployed == measured" rule also means the
+  live Cloud Run service must be repointed to `SEC_RAG_CONFIG=configs/v2.yaml`.
+
 ### Generation — Claude Haiku 4.5, temperature 0, grounded prompt, numbered citations
 - **Alternatives:** Sonnet/Opus (stronger, slower, pricier).
 - **Tradeoff:** generation is **not** the bottleneck — faithfulness is already
