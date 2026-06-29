@@ -17,6 +17,7 @@ No model selector: model choice is a dev/eval concern (design doc), not a UI kno
 
 from __future__ import annotations
 
+import json
 import os
 
 import httpx
@@ -36,30 +37,52 @@ query = st.text_input(
     placeholder="Ask about a 10-K — e.g., 'What were Apple's biggest risk factors in FY2023?'",
 )
 
+def _stream_answer(q: str):
+    """Yield answer text deltas from /query/stream; stash the final frame.
+
+    Streaming gives low time-to-first-token even though full generation is ~6s.
+    The final SSE frame carries citations + metrics, kept in session_state for
+    rendering after the answer streams in.
+    """
+    with httpx.stream(
+        "POST", f"{API_URL}/query/stream", json={"query": q}, headers=_HEADERS, timeout=120.0
+    ) as r:
+        r.raise_for_status()
+        for line in r.iter_lines():
+            if not line.startswith("data: "):
+                continue
+            payload = line[len("data: "):]
+            if payload == "[DONE]":
+                break
+            ev = json.loads(payload)
+            if ev["type"] == "token":
+                yield ev["text"]
+            elif ev["type"] == "done":
+                st.session_state["_final"] = ev["response"]
+            elif ev["type"] == "error":
+                raise RuntimeError(ev["detail"])
+
+
 if st.button("Ask", type="primary") and query.strip():
+    st.markdown("### Answer")
+    st.session_state["_final"] = None
     try:
-        resp = httpx.post(
-            f"{API_URL}/query", json={"query": query}, headers=_HEADERS, timeout=60.0
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        st.write_stream(_stream_answer(query))  # renders tokens as they arrive
     except Exception as exc:  # demo: show the failure plainly
         st.error(f"Request failed: {exc}")
         st.stop()
 
-    metrics = data["metrics"]
+    data = st.session_state.get("_final")
+    if not data:
+        st.error("Stream ended without a response payload.")
+        st.stop()
 
-    # Answer + faithfulness badge slot.
-    faith = metrics.get("faithfulness")
+    metrics = data["metrics"]
+    faith = metrics.get("faithfulness")  # None on the stream path (judge off)
     badge = f"Faithfulness {faith:.2f}" if faith is not None else "Faithfulness —"
-    answer_col, badge_col = st.columns([5, 1])
-    with answer_col:
-        st.markdown("### Answer")
-        st.write(data["answer"])
-    with badge_col:
-        st.metric("self-grade", badge)
-        if faith is None:
-            st.caption("RAGAS off in V0")
+    st.metric("self-grade", badge)
+    if faith is None:
+        st.caption("faithfulness judge off on the live path (measured in eval = 0.93)")
 
     # Sources: cited (colored) vs retrieved-but-not-cited (neutral).
     st.markdown("### Sources")

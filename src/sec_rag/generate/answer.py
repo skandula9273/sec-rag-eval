@@ -14,6 +14,7 @@ Until then cost is directional, and that is stated wherever it is shown.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from sec_rag.config import GenerationConfig, Secrets
@@ -89,13 +90,51 @@ def generate_answer(
     cited = sorted({int(m) for m in _CITE_RE.findall(text)})
     tokens_in = msg.usage.input_tokens
     tokens_out = msg.usage.output_tokens
+    return _assemble(cfg.model, text, tokens_in, tokens_out)
+
+
+def _assemble(model: str, text: str, tokens_in: int, tokens_out: int) -> GeneratedAnswer:
     return GeneratedAnswer(
         text=text,
-        cited_indices=cited,
+        cited_indices=sorted({int(m) for m in _CITE_RE.findall(text)}),
         tokens_in=tokens_in,
         tokens_out=tokens_out,
-        cost_usd=_cost(cfg.model, tokens_in, tokens_out),
+        cost_usd=_cost(model, tokens_in, tokens_out),
         # Honest by construction: estimate iff this model has no confirmed rate.
-        cost_is_estimate=cfg.model not in PRICING,
-        model=cfg.model,
+        cost_is_estimate=model not in PRICING,
+        model=model,
     )
+
+
+def generate_answer_stream(
+    question: str,
+    chunks: list[RetrievedChunk],
+    cfg: GenerationConfig,
+    secrets: Secrets | None = None,
+) -> Iterator[str | GeneratedAnswer]:
+    """Stream the answer for low time-to-first-token.
+
+    Yields text deltas (str) as the model produces them, then ONE final
+    ``GeneratedAnswer`` (citations + usage + cost, built from the final message).
+    Same prompt/system/model as ``generate_answer`` — only the transport differs,
+    so the streamed answer is the answer ``/query`` would return.
+    """
+    if cfg.provider != "anthropic":
+        raise NotImplementedError(f"V0 generates via Anthropic, got {cfg.provider!r}")
+    secrets = secrets or Secrets()
+    secrets.require("anthropic_api_key")
+    from anthropic import Anthropic
+
+    client = Anthropic(api_key=secrets.anthropic_api_key)
+    with client.messages.stream(
+        model=cfg.model,
+        max_tokens=cfg.max_tokens,
+        temperature=cfg.temperature,
+        system=_SYSTEM,
+        messages=[{"role": "user", "content": _build_prompt(question, chunks)}],
+    ) as stream:
+        for delta in stream.text_stream:
+            yield delta
+        final = stream.get_final_message()
+    text = "".join(b.text for b in final.content if getattr(b, "type", None) == "text")
+    yield _assemble(cfg.model, text, final.usage.input_tokens, final.usage.output_tokens)

@@ -333,6 +333,18 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
   known-debt single-connection item). The <2.5 s target should be reframed as TTFT
   or retrieval-latency, not e2e-with-generation.
 
+### Streaming — SSE endpoint for low time-to-first-token
+- Added **`/query/stream`** (Server-Sent Events): streams answer deltas, then a
+  final frame with citations + metrics. Anthropic `messages.stream`; same retrieval
+  + prompt as `/query` (so the streamed answer == the `/query` answer); judge off
+  (can't stream). Demo renders it with `st.write_stream`. `/query` + the eval path
+  are unchanged.
+- **Measured TTFT ~3.4 s** (first token) vs ~8 s waiting for the full non-streamed
+  answer — a real perceived-latency win. **Honest catch:** TTFT is now
+  *retrieval-bound* — the 3-large query embedding (one OpenAI call) is ~2–3 s, so
+  TTFT can't dip below that without caching / a faster query embed. The query-embed
+  is the new latency floor; streaming hides the generation time, not the retrieval.
+
 ### Generation — Claude Haiku 4.5, temperature 0, grounded prompt, numbered citations
 - **Alternatives:** Sonnet/Opus (stronger, slower, pricier).
 - **Tradeoff:** generation is **not** the bottleneck — faithfulness is already

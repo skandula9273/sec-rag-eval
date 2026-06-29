@@ -13,10 +13,12 @@ readably instead of at the first embedding call. Run locally:
 from __future__ import annotations
 
 import hmac
+import json
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import StreamingResponse
 
 from sec_rag.config import load_config
 from sec_rag.pipeline import QueryEngine
@@ -74,3 +76,33 @@ def query(req: QueryRequest) -> QueryResponse:
     return engine.run(
         req.query, top_k=req.top_k, with_faithfulness=req.with_faithfulness
     ).response
+
+
+@app.post("/query/stream", dependencies=[Depends(require_api_key)])
+def query_stream(req: QueryRequest) -> StreamingResponse:
+    """Server-Sent Events stream for low time-to-first-token.
+
+    Emits `data: {"type":"token","text":...}` per answer delta, then
+    `data: {"type":"done","response": <QueryResponse>}`, then `data: [DONE]`.
+    No faithfulness judge on this path (it can't stream). Same retrieval + answer
+    as /query.
+    """
+    engine: QueryEngine | None = _state["engine"]
+    if engine is None:
+        raise HTTPException(status_code=503, detail=f"engine not ready: {_state['error']}")
+    if not req.query.strip():
+        raise HTTPException(status_code=422, detail="query must not be empty")
+
+    def sse():
+        try:
+            for ev in engine.stream(req.query, top_k=req.top_k):
+                if ev["type"] == "token":
+                    yield f"data: {json.dumps({'type': 'token', 'text': ev['text']})}\n\n"
+                else:
+                    payload = {"type": "done", "response": ev["response"].model_dump()}
+                    yield f"data: {json.dumps(payload)}\n\n"
+        except Exception as exc:  # surface mid-stream failures to the client
+            yield f"data: {json.dumps({'type': 'error', 'detail': str(exc)})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(sse(), media_type="text/event-stream")

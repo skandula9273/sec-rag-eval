@@ -10,13 +10,14 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 import psycopg
 
 from sec_rag.config import Config, Secrets
 from sec_rag.db.pool import new_connection
-from sec_rag.generate.answer import generate_answer
+from sec_rag.generate.answer import generate_answer, generate_answer_stream
 from sec_rag.generate.faithfulness import score_faithfulness
 from sec_rag.ingest.embed import Embedder
 from sec_rag.retrieve.dense import RetrievedChunk, dense_search
@@ -30,6 +31,26 @@ from sec_rag.api.schemas import Citation, Metrics, QueryResponse
 class PipelineResult:
     response: QueryResponse
     retrieved: list[RetrievedChunk]  # raw, for eval recall@k against evidence
+
+
+def _build_citations(retrieved: list[RetrievedChunk], cited_indices: list[int]) -> list[Citation]:
+    """Map retrieved chunks to Citations, flagging which ones the answer cited."""
+    return [
+        Citation(
+            source_index=i,
+            cited=(i in cited_indices),
+            doc_name=c.doc_name,
+            ticker=c.ticker,
+            filing_type=c.filing_type,
+            filing_date=c.filing_date,
+            page=c.page,
+            section=c.section,
+            excerpt=c.content,
+            retrieval_score=c.retrieval_score,
+            rerank_score=c.rerank_score,
+        )
+        for i, c in enumerate(retrieved, start=1)
+    ]
 
 
 class QueryEngine:
@@ -139,22 +160,7 @@ class QueryEngine:
             faithfulness = fr.score
             faithfulness_ms = int((time.perf_counter() - t2) * 1000)
 
-        citations = [
-            Citation(
-                source_index=i,
-                cited=(i in gen.cited_indices),
-                doc_name=c.doc_name,
-                ticker=c.ticker,
-                filing_type=c.filing_type,
-                filing_date=c.filing_date,
-                page=c.page,
-                section=c.section,
-                excerpt=c.content,
-                retrieval_score=c.retrieval_score,
-                rerank_score=c.rerank_score,
-            )
-            for i, c in enumerate(retrieved, start=1)
-        ]
+        citations = _build_citations(retrieved, gen.cited_indices)
 
         metrics = Metrics(
             faithfulness=faithfulness,  # None unless eval.faithfulness enabled
@@ -178,3 +184,46 @@ class QueryEngine:
             model=gen.model,
         )
         return PipelineResult(response=response, retrieved=retrieved)
+
+    def stream(self, query: str, top_k: int | None = None) -> Iterator[dict]:
+        """Stream a response for low time-to-first-token.
+
+        Yields ``{"type": "token", "text": ...}`` for each answer delta as the
+        model produces it, then a final ``{"type": "done", "response":
+        QueryResponse}`` carrying citations + metrics. Retrieval is the SAME path
+        as run(); the faithfulness judge is off (it can't stream and isn't on the
+        UX path). Used by the API's /query/stream endpoint.
+        """
+        trace_id = uuid.uuid4().hex
+        retrieved, retrieval_ms = self.retrieve(query, top_k)
+
+        t1 = time.perf_counter()
+        gen = None
+        for item in generate_answer_stream(query, retrieved, self.cfg.generation, self.secrets):
+            if isinstance(item, str):
+                yield {"type": "token", "text": item}
+            else:
+                gen = item  # the final GeneratedAnswer (last item)
+        generation_ms = int((time.perf_counter() - t1) * 1000)
+
+        metrics = Metrics(
+            faithfulness=None,
+            latency_ms=retrieval_ms + generation_ms,
+            retrieval_ms=retrieval_ms,
+            rerank_ms=None,
+            generation_ms=generation_ms,
+            faithfulness_ms=None,
+            cost_usd=gen.cost_usd,
+            cost_is_estimate=gen.cost_is_estimate,
+            tokens_in=gen.tokens_in,
+            tokens_out=gen.tokens_out,
+            chunks_retrieved=len(retrieved),
+        )
+        response = QueryResponse(
+            answer=gen.text,
+            citations=_build_citations(retrieved, gen.cited_indices),
+            metrics=metrics,
+            trace_id=trace_id,
+            model=gen.model,
+        )
+        yield {"type": "done", "response": response}
