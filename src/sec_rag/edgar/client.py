@@ -74,19 +74,29 @@ def resolve_ticker(ticker: str) -> tuple[str, str]:
     return m[t]
 
 
-def latest_filing(ticker: str, form: str = "10-K") -> Filing:
-    """Most recent filing of ``form`` for ``ticker`` (default 10-K), live."""
+def recent_filings(ticker: str, form: str = "10-K", n: int = 1) -> list[Filing]:
+    """The ``n`` most recent filings of ``form`` for ``ticker`` (newest first), live."""
     cik, company = resolve_ticker(ticker)
     sub = json.loads(_get(f"https://data.sec.gov/submissions/CIK{cik}.json").decode())
     r = sub["filings"]["recent"]
+    cik_int = str(int(cik))  # archives path uses the un-padded CIK
+    out: list[Filing] = []
     for f, date, acc, doc in zip(r["form"], r["filingDate"], r["accessionNumber"], r["primaryDocument"]):
         if f == form:
             accn = acc.replace("-", "")
-            cik_int = str(int(cik))  # archives path uses the un-padded CIK
             url = f"https://www.sec.gov/Archives/edgar/data/{cik_int}/{accn}/{doc}"
-            return Filing(cik=cik, company=company, form=form, filing_date=date,
-                          accession=acc, primary_doc=doc, url=url)
-    raise ValueError(f"No {form} found for {ticker} in recent filings.")
+            out.append(Filing(cik=cik, company=company, form=form, filing_date=date,
+                              accession=acc, primary_doc=doc, url=url))
+            if len(out) >= n:
+                break
+    if not out:
+        raise ValueError(f"No {form} found for {ticker} in recent filings.")
+    return out
+
+
+def latest_filing(ticker: str, form: str = "10-K") -> Filing:
+    """Most recent filing of ``form`` for ``ticker`` (default 10-K), live."""
+    return recent_filings(ticker, form, n=1)[0]
 
 
 def fetch_filing_text(filing: Filing) -> str:

@@ -9,7 +9,7 @@
   <title>SEC Filings RAG — grounded answers over 10-K filings</title>
   <meta name="description" content="Ask SEC 10-K filings. Dense retrieval over a vector-indexed corpus, grounded cited answers, streamed." />
   <!-- ?v= cache-buster: bump on every asset change so the new JS/CSS actually loads. -->
-  <link rel="stylesheet" href="./style.css?v=11" />
+  <link rel="stylesheet" href="./style.css?v=12" />
 </head>
 <body>
   <div class="horizon" aria-hidden="true"></div>
@@ -43,9 +43,9 @@
       <button id="askBtn" class="ask-btn" type="submit">Ask →</button>
     </form>
     <p class="ask-hint">
-      Enter a <b>ticker</b> (AAPL, NVDA, TSLA…) + filing type to query that company’s
-      latest <b>10-K / 10-Q / 8-K live from EDGAR</b> (Auto picks from your question) —
-      or leave the ticker blank to use the pre-indexed sample corpus.
+      Enter a <b>ticker</b> (AAPL, NVDA, TSLA…) to query that company’s latest
+      <b>10-K / 10-Q / 8-K live from EDGAR</b> — ask to <b>compare</b> across years
+      and it pulls multiple filings. Leave the ticker blank for the sample corpus.
     </p>
 
     <div class="quicklinks">
@@ -54,9 +54,9 @@
 
     <div class="chips" id="chips">
       <button class="chip" data-ticker="NVDA">What was total revenue in the most recent fiscal year?</button>
-      <button class="chip" data-ticker="AAPL">Summarize the key risk factors from the latest 10-K.</button>
-      <button class="chip" data-ticker="TSLA">What was net income in the most recent year?</button>
-      <button class="chip">What was Nike's 3-year average COGS as a % of revenue, FY2016–FY2018?</button>
+      <button class="chip" data-ticker="AAPL">How did total revenue change compared to the prior year?</button>
+      <button class="chip" data-ticker="MSFT">Summarize the most recent 8-K event.</button>
+      <button class="chip" data-ticker="TSLA">Compare net income this year versus last year.</button>
     </div>
   </main>
 
@@ -102,6 +102,6 @@
   </div>
 
   <div id="build" class="build">build …</div>
-  <script src="./app.js?v=11"></script>
+  <script src="./app.js?v=12"></script>
 </body>
 </html>

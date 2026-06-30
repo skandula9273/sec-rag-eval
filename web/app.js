@@ -3,7 +3,7 @@
 // streamed answer + sources + metrics. No API key / settings: the API is open
 // for now (auth is added back later).
 
-const BUILD = "v11 · byok";
+const BUILD = "v12 · multi-filing";
 
 const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 const API = IS_LOCAL
@@ -86,7 +86,7 @@ async function ask(question, ticker, form) {
   $("status").hidden = true;
   $("status").textContent = "";
   $("answer").innerHTML = live
-    ? `Fetching ${ticker.toUpperCase()}'s latest 10-K from EDGAR + indexing… (~15–30s the first time)`
+    ? `Fetching ${ticker.toUpperCase()}'s filing(s) from EDGAR + indexing… (~15–30s the first time, instant once cached)`
     : "Thinking… (first request after idle can take ~15–25s)";
   $("sources").innerHTML = "";
   $("metrics").innerHTML = "";

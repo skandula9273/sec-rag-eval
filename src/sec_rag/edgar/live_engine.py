@@ -21,7 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from sec_rag.config import Config, Secrets
-from sec_rag.edgar.client import Filing, fetch_filing_text, latest_filing
+from sec_rag.edgar.client import Filing, fetch_filing_text, recent_filings
 from sec_rag.generate.answer import generate_answer_stream
 from sec_rag.ingest.chunk import chunk_document, tiktoken_encoder
 from sec_rag.ingest.embed import Embedder
@@ -47,6 +47,20 @@ def detect_form(question: str) -> str:
     if _FORM_10Q.search(question):
         return "10-Q"
     return "10-K"
+
+
+_MULTI = re.compile(
+    r"\b(compare|comparison|compared|versus|vs\.?|year[- ]over[- ]year|yoy|trend|"
+    r"grow(th|n|ing)?|change (from|since|over)|over the (last|past)|each year|"
+    r"both years|prior year|previous year|year[- ]on[- ]year)\b", re.I)
+_THREE = re.compile(r"\b(three|3)[- ]?year|last (three|3)|past (three|3)|trend\b", re.I)
+
+
+def detect_multi(question: str) -> int:
+    """How many filings to pull: 1 (single) or 2-3 (comparison/trend)."""
+    if not _MULTI.search(question):
+        return 1
+    return 3 if _THREE.search(question) else 2
 
 
 @dataclass
@@ -192,17 +206,23 @@ class LiveEngine:
         trace_id = uuid.uuid4().hex
         if not form or form.lower() == "auto":
             form = detect_form(question)
+        # Comparison/trend questions pull the latest N filings; 8-K events don't.
+        n = 1 if form == "8-K" else detect_multi(question)
         gen_secrets = secrets or self.secrets
         embedder = Embedder(self.cfg.embedding, secrets) if secrets else self.embedder
 
         t0 = time.perf_counter()
-        filing = latest_filing(ticker, form)
-        cached = filing.accession in self._cache
-        yield {"type": "status",
-               "text": f"{filing.company} — {filing.form} filed {filing.filing_date}"
-                       + ("" if cached else " (fetching + indexing…)")}
-        idx = self._index(filing, embedder)
-        retrieved = self._retrieve(idx, question, k, embedder)
+        filings = recent_filings(ticker, form, n)
+        label = f"{filings[0].company} — " + ", ".join(f"{f.form} {f.filing_date}" for f in filings)
+        any_cold = any(f.accession not in self._cache for f in filings)
+        yield {"type": "status", "text": label + (" (fetching + indexing…)" if any_cold else "")}
+
+        # Retrieve per filing so each period is represented (cap total context).
+        per_k = k if n == 1 else max(2, 12 // n)
+        retrieved = []
+        for f in filings:
+            idx = self._index(f, embedder)
+            retrieved += self._retrieve(idx, question, per_k, embedder)
         retrieval_ms = int((time.perf_counter() - t0) * 1000)
 
         t1 = time.perf_counter()
