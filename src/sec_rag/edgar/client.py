@@ -95,19 +95,45 @@ def fetch_filing_text(filing: Filing) -> str:
     return html_to_text(html)
 
 
-def html_to_text(html: str) -> str:
-    """Strip a 10-K HTML document to readable text.
+import re
 
-    Drops script/style and inline-XBRL bookkeeping tags, collapses whitespace.
-    Not perfect on tables (a known lever — same lesson as the FinanceBench PDFs),
-    but yields chunkable text for retrieval.
+# Inline-XBRL bookkeeping blocks: the header lists every context/unit/fact, which
+# bs4 otherwise dumps as a wall of noise ("...2026 FY false P1Y iso4217:USD...").
+# Drop these wrappers; KEEP ix:nonFraction / ix:nonNumeric (they hold the visible
+# numbers shown in the document).
+_XBRL_DROP = {"ix:header", "ix:hidden", "ix:references", "ix:resources"}
+_WS = re.compile(r"[ \t ]+")
+
+
+def html_to_text(html: str) -> str:
+    """Strip a 10-K/10-Q/8-K HTML document to clean, chunkable text.
+
+    Removes script/style, the inline-XBRL header/hidden bookkeeping, and
+    display:none nodes; renders tables as ``cell | cell`` rows so financial line
+    items survive (parsing quality is the lever — same lesson as the FinanceBench
+    PDFs). Collapses whitespace.
     """
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(html, "html.parser")
+
     for tag in soup(["script", "style"]):
         tag.decompose()
-    text = soup.get_text(separator=" ")
-    # Collapse runs of whitespace; keep paragraph-ish breaks.
-    lines = [ln.strip() for ln in text.splitlines()]
+    for tag in soup.find_all(lambda t: t.name and t.name.lower() in _XBRL_DROP):
+        tag.decompose()
+    for tag in soup.find_all(style=re.compile(r"display\s*:\s*none", re.I)):
+        tag.decompose()
+
+    # Render each table as newline-joined "cell | cell" rows, in place.
+    for table in soup.find_all("table"):
+        rows = []
+        for tr in table.find_all("tr"):
+            cells = [c.get_text(" ", strip=True) for c in tr.find_all(["th", "td"])]
+            cells = [c for c in cells if c]
+            if cells:
+                rows.append(" | ".join(cells))
+        table.replace_with("\n" + "\n".join(rows) + "\n")
+
+    text = soup.get_text(separator="\n")
+    lines = [_WS.sub(" ", ln).strip() for ln in text.splitlines()]
     return "\n".join(ln for ln in lines if ln)
