@@ -15,6 +15,9 @@ const DEFAULT_API = IS_LOCAL
 // when done testing (the key in git history is then dead/worthless).
 const HARDCODED_KEY = "_LielMdEuNfPctnYsUuRO7ZZ7Xbw_kMM";
 
+// Build marker — proves WHICH app.js actually executed in your browser.
+const BUILD = "v8 · hardcoded-key";
+
 const $ = (id) => document.getElementById(id);
 const getKey = () => localStorage.getItem("secrag_key") || HARDCODED_KEY;
 const getApi = () => localStorage.getItem("secrag_api") || DEFAULT_API;
@@ -189,3 +192,7 @@ $("chips").addEventListener("click", (e) => {
     ask(e.target.textContent);
   }
 });
+
+// Stamp the build marker once the script runs, so you can see which version loaded.
+const _b = $("build");
+if (_b) _b.textContent = "build " + BUILD + (IS_LOCAL ? " · local" : "");
