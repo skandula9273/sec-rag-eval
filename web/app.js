@@ -10,8 +10,13 @@ const DEFAULT_API = IS_LOCAL
   ? "http://localhost:8000"
   : "https://sec-rag-api-200217758117.us-east1.run.app";
 
+// TEMP (testing only): hardcoded gate key so the tool works with no setup.
+// SECURITY: this is a PUBLIC repo — rotate SEC_RAG_API_KEY and delete this line
+// when done testing (the key in git history is then dead/worthless).
+const HARDCODED_KEY = "_LielMdEuNfPctnYsUuRO7ZZ7Xbw_kMM";
+
 const $ = (id) => document.getElementById(id);
-const getKey = () => localStorage.getItem("secrag_key") || "";
+const getKey = () => localStorage.getItem("secrag_key") || HARDCODED_KEY;
 const getApi = () => localStorage.getItem("secrag_api") || DEFAULT_API;
 
 // --- Settings modal ---
