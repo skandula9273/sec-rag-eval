@@ -3,7 +3,7 @@
 // streamed answer + sources + metrics. No API key / settings: the API is open
 // for now (auth is added back later).
 
-const BUILD = "v13 · sections+byok-ready";
+const BUILD = "v14 · ratelimit+polish";
 
 const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 const API = IS_LOCAL
@@ -122,6 +122,7 @@ async function ask(question, ticker, form) {
       openModal();
       return;
     }
+    if (res.status === 429) throw new Error("Rate limit reached — please wait a minute and try again.");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const reader = res.body.getReader();

@@ -46,3 +46,12 @@ def test_detect_multi():
     assert detect_multi("What was revenue last year?") == 1
     assert detect_multi("Compare revenue this year vs last year") == 2
     assert detect_multi("Revenue trend over the last 3 years") == 3
+    assert detect_multi("revenue over the last 5 years") == 5
+    assert detect_multi("ten year growth") == 5  # capped at 5
+
+
+def test_clean_section():
+    from sec_rag.edgar.live_engine import _clean_section
+    assert _clean_section("Item 1A. | Risk Factors | 12") == "Item 1A. Risk Factors"
+    assert _clean_section("Item 7. MD&A") == "Item 7. MD&A"
+    assert _clean_section(None) is None

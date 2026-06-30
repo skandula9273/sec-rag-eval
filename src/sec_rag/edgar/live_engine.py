@@ -53,14 +53,35 @@ _MULTI = re.compile(
     r"\b(compare|comparison|compared|versus|vs\.?|year[- ]over[- ]year|yoy|trend|"
     r"grow(th|n|ing)?|change (from|since|over)|over the (last|past)|each year|"
     r"both years|prior year|previous year|year[- ]on[- ]year)\b", re.I)
-_THREE = re.compile(r"\b(three|3)[- ]?year|last (three|3)|past (three|3)|trend\b", re.I)
+_NUM_YEARS = re.compile(r"\b(\d+)[- ]?year|\b(?:last|past)\s+(\d+)\s+year", re.I)
+_WORD_NUM = {"two": 2, "three": 3, "four": 4, "five": 5}
+_MAX_FILINGS = 5
 
 
 def detect_multi(question: str) -> int:
-    """How many filings to pull: 1 (single) or 2-3 (comparison/trend)."""
+    """How many filings to pull: 1 (single) or 2..5 (comparison/trend)."""
     if not _MULTI.search(question):
         return 1
-    return 3 if _THREE.search(question) else 2
+    m = _NUM_YEARS.search(question)
+    if m:
+        n = int(m.group(1) or m.group(2))
+        return max(2, min(n, _MAX_FILINGS))
+    for word, n in _WORD_NUM.items():
+        if re.search(rf"\b{word}\b", question, re.I):
+            return min(n, _MAX_FILINGS)
+    if re.search(r"\btrend\b", question, re.I):
+        return 3
+    return 2
+
+
+def _clean_section(s: str | None) -> str | None:
+    """Normalize an Item label: drop table-row pipes and a trailing page number,
+    so a TOC-derived 'Item 1A. | Risk Factors | 12' reads 'Item 1A. Risk Factors'."""
+    if not s:
+        return s
+    s = s.replace(" | ", " ")
+    s = re.sub(r"\s+\d+\s*$", "", s)        # trailing TOC page number
+    return re.sub(r"\s+", " ", s).strip()
 
 
 @dataclass
@@ -173,7 +194,7 @@ class LiveEngine:
             strategy="section_then_token",
         )
         contents = [c.content for c in chunks]
-        sections = [c.section for c in chunks]
+        sections = [_clean_section(c.section) for c in chunks]
         vecs = _normalize(np.asarray(emb.embed(contents), dtype=np.float32))
         idx = IndexedFiling(filing=filing, contents=contents, vecs=vecs, sections=sections)
         self._cache[filing.accession] = idx

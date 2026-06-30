@@ -15,9 +15,12 @@ from __future__ import annotations
 import hmac
 import json
 import os
+import threading
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -26,6 +29,16 @@ from sec_rag.pipeline import QueryEngine
 from sec_rag.api.schemas import LiveQueryRequest, QueryRequest, QueryResponse
 
 _state: dict = {"engine": None, "live": None, "error": None}
+
+
+def _prewarm(live, tickers: list[str]) -> None:
+    """Index a few filings in the background so common demo queries are instant."""
+    for t in tickers:
+        try:
+            from sec_rag.edgar.client import latest_filing
+            live._index(latest_filing(t.strip(), "10-K"))
+        except Exception:
+            pass  # best-effort warming; never crash startup
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
@@ -53,6 +66,12 @@ async def lifespan(app: FastAPI):
         # Live EDGAR path shares the same config (embed model, chunking, top_k).
         from sec_rag.edgar.live_engine import LiveEngine
         _state["live"] = LiveEngine(cfg)
+        # Optional: warm popular tickers in the background so a demo's likely first
+        # queries are instant. Off unless SEC_RAG_PREWARM is set (it costs a few
+        # cents per cold start); the persistent cache keeps them warm afterwards.
+        if os.environ.get("SEC_RAG_PREWARM"):
+            tickers = os.environ.get("SEC_RAG_PREWARM_TICKERS", "AAPL,MSFT,NVDA,GOOGL,AMZN,TSLA").split(",")
+            threading.Thread(target=_prewarm, args=(_state["live"], tickers), daemon=True).start()
     except Exception as exc:  # surfaced via /query as 503
         _state["error"] = str(exc)
     try:
@@ -76,6 +95,26 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "X-API-Key", "X-OpenAI-Key", "X-Anthropic-Key"],
 )
+
+
+# Lightweight per-IP rate limit so a public link can't be hammered into a big bill.
+# In-memory + per-instance (resets on cold start) — a guard, not airtight; the cache
+# also makes repeat queries free. Tune via SEC_RAG_RATELIMIT="N/seconds".
+_RL_N, _RL_WINDOW = (int(x) for x in os.environ.get("SEC_RAG_RATELIMIT", "40/600").split("/"))
+_RL_HITS: dict[str, deque] = defaultdict(deque)
+
+
+def _rate_limited(request: Request) -> bool:
+    fwd = request.headers.get("x-forwarded-for", "")
+    ip = fwd.split(",")[0].strip() or (request.client.host if request.client else "?")
+    now = time.time()
+    q = _RL_HITS[ip]
+    while q and q[0] < now - _RL_WINDOW:
+        q.popleft()
+    if len(q) >= _RL_N:
+        return True
+    q.append(now)
+    return False
 
 
 def _byok_secrets(openai_key: str | None, anthropic_key: str | None) -> Secrets | None:
@@ -115,6 +154,7 @@ def query(req: QueryRequest) -> QueryResponse:
 @app.post("/query/stream", dependencies=[Depends(require_api_key)])
 def query_stream(
     req: QueryRequest,
+    request: Request,
     x_openai_key: str | None = Header(default=None),
     x_anthropic_key: str | None = Header(default=None),
 ) -> StreamingResponse:
@@ -130,6 +170,8 @@ def query_stream(
         raise HTTPException(status_code=503, detail=f"engine not ready: {_state['error']}")
     if not req.query.strip():
         raise HTTPException(status_code=422, detail="query must not be empty")
+    if _rate_limited(request):
+        raise HTTPException(status_code=429, detail="Rate limit reached — please wait a minute.")
     secrets = _byok_secrets(x_openai_key, x_anthropic_key)
 
     def sse():
@@ -150,6 +192,7 @@ def query_stream(
 @app.post("/query/live/stream", dependencies=[Depends(require_api_key)])
 def query_live_stream(
     req: LiveQueryRequest,
+    request: Request,
     x_openai_key: str | None = Header(default=None),
     x_anthropic_key: str | None = Header(default=None),
 ) -> StreamingResponse:
@@ -165,6 +208,8 @@ def query_live_stream(
         raise HTTPException(status_code=503, detail=f"engine not ready: {_state['error']}")
     if not req.query.strip() or not req.ticker.strip():
         raise HTTPException(status_code=422, detail="ticker and query are required")
+    if _rate_limited(request):
+        raise HTTPException(status_code=429, detail="Rate limit reached — please wait a minute.")
     secrets = _byok_secrets(x_openai_key, x_anthropic_key)
 
     def sse():
