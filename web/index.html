@@ -3,9 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Force revalidation so browsers/CDN don't serve a stale page during testing. -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
   <title>SEC Filings RAG — grounded answers over 10-K filings</title>
   <meta name="description" content="Ask SEC 10-K filings. Dense retrieval over a vector-indexed corpus, grounded cited answers, streamed." />
-  <link rel="stylesheet" href="./style.css" />
+  <!-- ?v= cache-buster: bump on every asset change so the new JS/CSS actually loads. -->
+  <link rel="stylesheet" href="./style.css?v=7" />
 </head>
 <body>
   <div class="horizon" aria-hidden="true"></div>
@@ -83,6 +87,6 @@
     </div>
   </div>
 
-  <script src="./app.js"></script>
+  <script src="./app.js?v=7"></script>
 </body>
 </html>
