@@ -28,6 +28,9 @@ let pendingQuestion = null;
 $("settingsBtn").onclick = openModal;
 $("settingsBtn2").onclick = openModal;
 $("closeModal").onclick = closeModal;
+// Never trap the user: click the backdrop or press Escape to dismiss the modal.
+$("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 $("saveKey").onclick = () => {
   localStorage.setItem("secrag_key", $("keyInput").value.trim());
   const url = $("urlInput").value.trim();
@@ -86,8 +89,18 @@ async function ask(question) {
   if (busy || !question.trim()) return;
   if (!getKey() && !IS_LOCAL) {        // local API guard is off, so only gate remotely
     pendingQuestion = question;
-    $("queryInput").value = question;  // keep it visible behind the modal
-    openModal();
+    $("queryInput").value = question;  // keep it visible
+    // Non-blocking nudge instead of a forced modal — the page stays usable.
+    $("result").hidden = false;
+    $("error").hidden = false;
+    $("answer").innerHTML = "";
+    $("sources").innerHTML = "";
+    $("metrics").innerHTML = "";
+    $("faithBadge").textContent = "—";
+    $("error").innerHTML =
+      '🔑 Add your API access key to run this — click <b>⚙ API key</b> above. ' +
+      "It’s stored only in your browser; you can browse the page freely without it.";
+    openModal();  // opened for convenience, but fully dismissable (Esc / click outside)
     return;
   }
   busy = true;
