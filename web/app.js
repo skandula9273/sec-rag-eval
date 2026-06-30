@@ -3,7 +3,7 @@
 // streamed answer + sources + metrics. No API key / settings: the API is open
 // for now (auth is added back later).
 
-const BUILD = "v9 · no-key";
+const BUILD = "v10 · live-edgar";
 
 const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 const API = IS_LOCAL
@@ -54,26 +54,36 @@ function renderMetrics(m, model) {
 // --- Ask (streaming) ---
 let busy = false;
 
-async function ask(question) {
+// A ticker routes to the live EDGAR path (any company's latest 10-K); blank uses
+// the pre-indexed FinanceBench corpus. Both stream the same event shape.
+async function ask(question, ticker) {
   if (busy || !question.trim()) return;
   busy = true;
+  const live = !!(ticker && ticker.trim());
 
   $("result").hidden = false;
   $("error").hidden = true;
   $("error").textContent = "";
-  $("answer").innerHTML = "Thinking… (first request after idle can take ~15–25s)";
+  $("status").hidden = true;
+  $("status").textContent = "";
+  $("answer").innerHTML = live
+    ? `Fetching ${ticker.toUpperCase()}'s latest 10-K from EDGAR + indexing… (~15–30s the first time)`
+    : "Thinking… (first request after idle can take ~15–25s)";
   $("sources").innerHTML = "";
   $("metrics").innerHTML = "";
   $("faithBadge").textContent = "…";
   $("askBtn").disabled = true;
   $("result").scrollIntoView({ behavior: "smooth", block: "start" });
 
+  const url = live ? API + "/query/live/stream" : API + "/query/stream";
+  const body = live ? { ticker: ticker.trim(), query: question } : { query: question };
+
   let answerText = "";
   try {
-    const res = await fetch(API + "/query/stream", {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: question }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -92,7 +102,10 @@ async function ask(question) {
         const payload = line.slice(5).trim();
         if (payload === "[DONE]") continue;
         const ev = JSON.parse(payload);
-        if (ev.type === "token") {
+        if (ev.type === "status") {
+          $("status").hidden = false;
+          $("status").textContent = "📄 " + ev.text;
+        } else if (ev.type === "token") {
           answerText += ev.text;
           $("answer").innerHTML = linkifyCitations(answerText);
         } else if (ev.type === "done") {
@@ -121,12 +134,14 @@ async function ask(question) {
 // --- Wire up ---
 $("askForm").addEventListener("submit", (e) => {
   e.preventDefault();
-  ask($("queryInput").value);
+  ask($("queryInput").value, $("tickerInput").value);
 });
 $("chips").addEventListener("click", (e) => {
   if (e.target.classList.contains("chip")) {
+    const ticker = e.target.dataset.ticker || "";
+    $("tickerInput").value = ticker;
     $("queryInput").value = e.target.textContent;
-    ask(e.target.textContent);
+    ask(e.target.textContent, ticker);
   }
 });
 

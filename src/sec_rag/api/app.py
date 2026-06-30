@@ -23,9 +23,9 @@ from fastapi.responses import StreamingResponse
 
 from sec_rag.config import load_config
 from sec_rag.pipeline import QueryEngine
-from sec_rag.api.schemas import QueryRequest, QueryResponse
+from sec_rag.api.schemas import LiveQueryRequest, QueryRequest, QueryResponse
 
-_state: dict = {"engine": None, "error": None}
+_state: dict = {"engine": None, "live": None, "error": None}
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
@@ -50,6 +50,9 @@ async def lifespan(app: FastAPI):
     try:
         cfg = load_config(config_path)
         _state["engine"] = QueryEngine(cfg)
+        # Live EDGAR path shares the same config (embed model, chunking, top_k).
+        from sec_rag.edgar.live_engine import LiveEngine
+        _state["live"] = LiveEngine(cfg)
     except Exception as exc:  # surfaced via /query as 503
         _state["error"] = str(exc)
     try:
@@ -116,6 +119,35 @@ def query_stream(req: QueryRequest) -> StreamingResponse:
                     payload = {"type": "done", "response": ev["response"].model_dump()}
                     yield f"data: {json.dumps(payload)}\n\n"
         except Exception as exc:  # surface mid-stream failures to the client
+            yield f"data: {json.dumps({'type': 'error', 'detail': str(exc)})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(sse(), media_type="text/event-stream")
+
+
+@app.post("/query/live/stream", dependencies=[Depends(require_api_key)])
+def query_live_stream(req: LiveQueryRequest) -> StreamingResponse:
+    """Live EDGAR path: fetch ``ticker``'s most recent ``form`` and answer over it.
+
+    SSE: a `status` event (which filing was pulled), then `token` deltas, then
+    `done` with citations + metrics, then `[DONE]`. Any company in EDGAR; the
+    filing is fetched + indexed on demand (cached by accession).
+    """
+    live = _state["live"]
+    if live is None:
+        raise HTTPException(status_code=503, detail=f"engine not ready: {_state['error']}")
+    if not req.query.strip() or not req.ticker.strip():
+        raise HTTPException(status_code=422, detail="ticker and query are required")
+
+    def sse():
+        try:
+            for ev in live.stream(req.ticker, req.query, form=req.form, top_k=req.top_k):
+                if ev["type"] == "done":
+                    payload = {"type": "done", "response": ev["response"].model_dump()}
+                    yield f"data: {json.dumps(payload)}\n\n"
+                else:  # status | token
+                    yield f"data: {json.dumps(ev)}\n\n"
+        except Exception as exc:
             yield f"data: {json.dumps({'type': 'error', 'detail': str(exc)})}\n\n"
         yield "data: [DONE]\n\n"
 

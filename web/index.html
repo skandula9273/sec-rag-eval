@@ -9,7 +9,7 @@
   <title>SEC Filings RAG — grounded answers over 10-K filings</title>
   <meta name="description" content="Ask SEC 10-K filings. Dense retrieval over a vector-indexed corpus, grounded cited answers, streamed." />
   <!-- ?v= cache-buster: bump on every asset change so the new JS/CSS actually loads. -->
-  <link rel="stylesheet" href="./style.css?v=9" />
+  <link rel="stylesheet" href="./style.css?v=10" />
 </head>
 <body>
   <div class="horizon" aria-hidden="true"></div>
@@ -23,25 +23,32 @@
     <p class="subhead">Ask SEC 10-K filings — grounded, cited answers over a vector-indexed corpus.</p>
 
     <form id="askForm" class="ask">
+      <input id="tickerInput" class="ticker-input" type="text" autocomplete="off"
+        maxlength="6" placeholder="Ticker" title="e.g. AAPL — blank uses the sample corpus" />
+      <span class="ask-divider"></span>
       <input
         id="queryInput"
         class="ask-input"
         type="text"
         autocomplete="off"
-        placeholder="Ask about a 10-K — e.g. “What were Boeing's FY2018 net PP&E?”"
+        placeholder="Ask about a 10-K — e.g. “What was total revenue last year?”"
       />
       <button id="askBtn" class="ask-btn" type="submit">Ask →</button>
     </form>
+    <p class="ask-hint">
+      Enter a <b>ticker</b> (AAPL, NVDA, TSLA…) to query that company’s latest 10-K
+      <b>live from EDGAR</b> — or leave it blank to use the pre-indexed sample corpus.
+    </p>
 
     <div class="quicklinks">
       <a class="ghost-btn" href="https://github.com/skandula9273/sec-rag-eval" target="_blank" rel="noopener">◆ View on GitHub</a>
     </div>
 
     <div class="chips" id="chips">
-      <button class="chip">What were Boeing's FY2018 net property, plant, and equipment (USD millions)?</button>
-      <button class="chip">What was Amazon's year-over-year revenue change from FY2016 to FY2017?</button>
+      <button class="chip" data-ticker="NVDA">What was total revenue in the most recent fiscal year?</button>
+      <button class="chip" data-ticker="AAPL">Summarize the key risk factors from the latest 10-K.</button>
+      <button class="chip" data-ticker="TSLA">What was net income in the most recent year?</button>
       <button class="chip">What was Nike's 3-year average COGS as a % of revenue, FY2016–FY2018?</button>
-      <button class="chip">What was Adobe's FY2015 operating cash flow ratio?</button>
     </div>
   </main>
 
@@ -52,6 +59,7 @@
         <h2>Answer</h2>
         <span id="faithBadge" class="faith-badge" title="Faithfulness (self-grade)">—</span>
       </div>
+      <div id="status" class="status" hidden></div>
       <div id="answer" class="answer"></div>
       <div id="error" class="error" hidden></div>
 
@@ -63,6 +71,6 @@
   </section>
 
   <div id="build" class="build">build …</div>
-  <script src="./app.js?v=9"></script>
+  <script src="./app.js?v=10"></script>
 </body>
 </html>

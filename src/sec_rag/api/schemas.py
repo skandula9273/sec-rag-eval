@@ -24,6 +24,14 @@ class QueryRequest(BaseModel):
     with_faithfulness: bool = False
 
 
+class LiveQueryRequest(BaseModel):
+    """Live EDGAR path: answer ``query`` over ``ticker``'s most recent ``form``."""
+    ticker: str
+    query: str
+    form: str = "10-K"
+    top_k: int | None = Field(default=None, ge=1, le=50)
+
+
 class Citation(BaseModel):
     source_index: int  # 1-based position in the sources panel
     cited: bool  # True if the answer referenced this source -> colored badge

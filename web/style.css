@@ -139,6 +139,31 @@ html, body {
   padding: 8px 4px;
 }
 .ask-input::placeholder { color: #9bb5b0; }
+.ticker-input {
+  width: 78px;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 8px 2px 8px 4px;
+}
+.ticker-input::placeholder { color: #9bb5b0; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.ask-divider { width: 1px; align-self: stretch; background: var(--border); margin: 4px 2px; }
+.ask-hint { color: var(--muted); font-size: 12.5px; margin: 10px auto 0; max-width: 560px; }
+.ask-hint b { color: var(--accent); font-weight: 600; }
+.status {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--accent);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 7px 11px;
+}
 .ask-btn {
   background: linear-gradient(180deg, var(--accent-2), var(--accent));
   color: white;
