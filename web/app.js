@@ -19,6 +19,7 @@ function openModal() {
   $("keyInput").value = getKey();
   $("urlInput").value = getApi();
   $("modal").hidden = false;
+  setTimeout(() => $("keyInput").focus(), 0);
 }
 function closeModal() { $("modal").hidden = true; }
 
@@ -171,6 +172,11 @@ async function ask(question) {
 $("askForm").addEventListener("submit", (e) => {
   e.preventDefault();
   ask($("queryInput").value);
+});
+// Clicking into the search box prompts for the key + base URL (until one is set),
+// so the homepage loads first and the key popup appears on first interaction.
+$("queryInput").addEventListener("focus", () => {
+  if (!getKey() && !IS_LOCAL && $("modal").hidden) openModal();
 });
 $("chips").addEventListener("click", (e) => {
   if (e.target.classList.contains("chip")) {
