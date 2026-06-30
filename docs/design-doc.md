@@ -440,6 +440,39 @@ regressed or were flat vs dense; see the ablation table in depth-round.md.
 the embedding model is the lever the data pointed to, and 1536-d Matryoshka
 truncation makes the win deployable at zero infra cost.
 
+### 2026-06-30 — Live EDGAR path (on-demand RAG for any company) alongside FinanceBench
+
+The locked architecture always showed "EDGAR EFTS API → live data." This realizes
+it: a **live path** that answers about **any company's most recent filing**, pulled
+from EDGAR on demand — keeping the FinanceBench corpus + its measured eval as the
+rigor core.
+
+**Architecture (additive, not a replacement):** the FinanceBench path stays
+(pre-indexed Neon corpus, the scored benchmark). The new live path is
+**fetch-and-index-on-demand**: question → resolve ticker→CIK + filing → fetch the
+filing live from EDGAR → parse (HTML) + chunk + embed on the fly → retrieve over an
+**in-memory** exact-cosine index (no Neon — sidesteps the 512 MB cap) → grounded,
+cited, streamed answer → cache by accession number so repeat asks are instant.
+
+**Verified live (rule #1):** EDGAR ticker map (10,433 companies), the submissions
+API (latest filings by form), and document fetch all reachable with a declared
+User-Agent. A current 10-K is ~1.5 MB HTML; bs4 parses it.
+
+**First milestone:** latest **10-K** for any ticker. Follow-ons: 10-Q/8-K + filing
+selection by question, multi-period compare.
+
+**Honest tradeoffs (on record):** (1) EDGAR filings are messy HTML/XBRL, not clean
+PDFs — parsing quality is the lever (our FinanceBench lesson). (2) A cold company =
+fetch + embed hundreds of chunks before answering (~15–60 s); cache makes repeats
+fast. (3) On-demand embedding costs a few cents per new filing. (4) The live path
+serves arbitrary companies and is **not** auto-scored; FinanceBench stays the
+measured benchmark for retrieval quality. (5) SEC fair-use: declared User-Agent +
+≤10 req/s.
+
+**Reuses** the existing chunk/embed/retrieve/generate/stream pipeline (~70%); new
+code is the EDGAR client + the on-demand engine. Build in increments:
+(1) EDGAR client, (2) on-demand RAG, (3) wire to API + frontend, (4) harden.
+
 ---
 
 *Living document. Versioned in repo. Updates noted at top with date and rationale.*
