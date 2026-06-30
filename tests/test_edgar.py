@@ -47,7 +47,8 @@ def test_detect_multi():
     assert detect_multi("Compare revenue this year vs last year") == 2
     assert detect_multi("Revenue trend over the last 3 years") == 3
     assert detect_multi("revenue over the last 5 years") == 5
-    assert detect_multi("ten year growth") == 5  # capped at 5
+    assert detect_multi("growth over the last 10 years") == 5  # digits, capped at 5
+    assert detect_multi("four year growth") == 4  # word number
 
 
 def test_clean_section():
