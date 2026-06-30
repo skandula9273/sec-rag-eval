@@ -105,6 +105,37 @@ _XBRL_DROP = {"ix:header", "ix:hidden", "ix:references", "ix:resources"}
 _WS = re.compile(r"[ \t ]+")
 
 
+def _extract_table(table) -> str:
+    """Render an HTML financial table to readable, aligned rows.
+
+    SEC tables split a value across cells — the currency symbol, the number, and a
+    close-paren (negatives) are often separate ``<td>``s, so naive get_text yields
+    "Total | $ | 3,306". This merges a leading ``$``/``(`` and a trailing ``)``/``%``
+    into the adjacent number and drops spacer cells, so a row reads "Total | $3,306"
+    / "Operating loss | $(1,234)" — keeping each line item next to its numbers.
+    """
+    rows: list[str] = []
+    for tr in table.find_all("tr"):
+        texts = [c.get_text(" ", strip=True) for c in tr.find_all(["th", "td"])]
+        cells: list[str] = []
+        pending = ""  # a leading symbol ($ or "(") waiting for its number
+        for t in texts:
+            if t in ("$", "("):
+                pending += t
+            elif t in (")", "%"):
+                if cells:
+                    cells[-1] += t  # close-paren / percent attaches to the prior value
+            elif t == "":
+                continue
+            else:
+                cells.append(pending + t)
+                pending = ""
+        cells = [c for c in cells if c.strip()]
+        if cells:
+            rows.append(" | ".join(cells))
+    return "\n".join(rows)
+
+
 def html_to_text(html: str) -> str:
     """Strip a 10-K/10-Q/8-K HTML document to clean, chunkable text.
 
@@ -124,15 +155,9 @@ def html_to_text(html: str) -> str:
     for tag in soup.find_all(style=re.compile(r"display\s*:\s*none", re.I)):
         tag.decompose()
 
-    # Render each table as newline-joined "cell | cell" rows, in place.
+    # Render each table with the dedicated extractor (merges split currency cells).
     for table in soup.find_all("table"):
-        rows = []
-        for tr in table.find_all("tr"):
-            cells = [c.get_text(" ", strip=True) for c in tr.find_all(["th", "td"])]
-            cells = [c for c in cells if c]
-            if cells:
-                rows.append(" | ".join(cells))
-        table.replace_with("\n" + "\n".join(rows) + "\n")
+        table.replace_with("\n" + _extract_table(table) + "\n")
 
     text = soup.get_text(separator="\n")
     lines = [_WS.sub(" ", ln).strip() for ln in text.splitlines()]
