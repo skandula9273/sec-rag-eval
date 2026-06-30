@@ -12,11 +12,22 @@ underneath**, not the chatbot. Numbers must be reproducible and honest.
 Owner: Sai (Santosh Kandula). Audience for the work: engineering leads who will
 read the code and scrutinize the numbers. Treat every output that way.
 
-## Where we are now (read before planning) — updated 2026-06-29
+## Where we are now (read before planning) — updated 2026-06-30
 
-- Phase: **V2 retrieval config productionized.** The ablation program found the
-  recall lever (the embedding model) and it is now the LIVE config. V0 and the
-  full retrieval-ablation program are complete and committed.
+- Phase: **Shipped — benchmarked V2 engine + a live EDGAR product on top.** Two
+  surfaces share one RAG engine. The retrieval ablation is complete; the product
+  has been built out and deployed.
+- **Live EDGAR product (built after V2):** a static frontend on GitHub Pages
+  (`skandula9273.github.io/sec-rag-eval`, code in `web/`) calling the deployed API.
+  Enter a ticker → fetch that company's newest **10-K/10-Q/8-K** live from EDGAR
+  (auto-detected; multi-filing compare for year-over-year), index on demand
+  (`src/sec_rag/edgar/`, in-memory + Neon cache), stream a grounded, **section-cited**
+  answer. **BYOK** (own keys via headers), per-IP **rate limit**, optional pre-warm.
+  Endpoints: `/query`, `/query/stream`, `/query/live/stream`. The original
+  FinanceBench corpus path is unchanged and still the measured benchmark.
+  Version history + decisions: `docs/versions.md`, `docs/decisions-and-steps.md`.
+- Phase (engine): **V2 retrieval config productionized.** The ablation program
+  found the recall lever (the embedding model) and it is the LIVE config.
 - **Live config = `configs/v2.yaml`: dense + text-embedding-3-large @1536-d +
   1024-token chunks.** Corpus re-ingested into Neon: **84 docs, 15,192 chunks,
   274 MB** (fits the free tier). ⚠️ The deployed Cloud Run API must set

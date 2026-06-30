@@ -36,3 +36,8 @@ V0_STUDY_GUIDE.dotx
 .Rhistory
 .claude/
 .streamlit/credentials.toml
+uv.lock
+
+# Aborted/smoke eval runs left locally — only COMPLETE runs are committed.
+eval_results/financebench_20260606T205418Z.json
+eval_results/financebench_20260606T222705Z.json
