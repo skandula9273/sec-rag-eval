@@ -3,7 +3,7 @@
 // streamed answer + sources + metrics. No API key / settings: the API is open
 // for now (auth is added back later).
 
-const BUILD = "v12 · multi-filing";
+const BUILD = "v13 · sections+byok-ready";
 
 const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 const API = IS_LOCAL
@@ -113,6 +113,15 @@ async function ask(question, ticker, form) {
       headers,
       body: JSON.stringify(body),
     });
+    if (res.status === 401) {        // require-BYOK mode: prompt for keys
+      busy = false;
+      $("askBtn").disabled = false;
+      $("answer").innerHTML = "";
+      $("error").hidden = false;
+      $("error").innerHTML = "🔑 This demo needs your own API keys — add your OpenAI + Anthropic keys, then ask again.";
+      openModal();
+      return;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const reader = res.body.getReader();

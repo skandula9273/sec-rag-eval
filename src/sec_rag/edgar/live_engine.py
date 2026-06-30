@@ -68,6 +68,7 @@ class IndexedFiling:
     filing: Filing
     contents: list[str]
     vecs: np.ndarray  # (n_chunks, dim), L2-normalized
+    sections: list[str | None]  # SEC Item label per chunk (for citations)
 
 
 class LiveEngine:
@@ -101,8 +102,9 @@ class LiveEngine:
                             "accession TEXT PRIMARY KEY, cached_at TIMESTAMPTZ NOT NULL DEFAULT now())")
                 cur.execute(f"CREATE TABLE IF NOT EXISTS live_chunks ("
                             "accession TEXT REFERENCES live_filings(accession) ON DELETE CASCADE, "
-                            "chunk_index INT, content TEXT, "
+                            "chunk_index INT, content TEXT, section TEXT, "
                             f"embedding vector({dim}), PRIMARY KEY (accession, chunk_index))")
+                cur.execute("ALTER TABLE live_chunks ADD COLUMN IF NOT EXISTS section TEXT")
         except Exception:
             self._conn = None  # caching disabled; queries still work
 
@@ -111,18 +113,19 @@ class LiveEngine:
             return None
         try:
             with self._conn.cursor() as cur:
-                cur.execute("SELECT content, embedding FROM live_chunks "
+                cur.execute("SELECT content, section, embedding FROM live_chunks "
                             "WHERE accession = %s ORDER BY chunk_index", (accession,))
                 rows = cur.fetchall()
             if not rows:
                 return None
             contents = [r[0] for r in rows]
-            vecs = np.asarray([r[1] for r in rows], dtype=np.float32)  # stored normalized
-            return contents, vecs
+            sections = [r[1] for r in rows]
+            vecs = np.asarray([r[2] for r in rows], dtype=np.float32)  # stored normalized
+            return contents, vecs, sections
         except Exception:
             return None
 
-    def _save_cached(self, filing: Filing, contents: list[str], vecs: np.ndarray):
+    def _save_cached(self, filing: Filing, contents, vecs, sections):
         if self._conn is None:
             return
         try:
@@ -133,9 +136,10 @@ class LiveEngine:
                             (filing.accession,))
                 cur.execute("DELETE FROM live_chunks WHERE accession = %s", (filing.accession,))
                 cur.executemany(
-                    "INSERT INTO live_chunks (accession, chunk_index, content, embedding) "
-                    "VALUES (%s, %s, %s, %s)",
-                    [(filing.accession, i, contents[i], Vector(vecs[i])) for i in range(len(contents))],
+                    "INSERT INTO live_chunks (accession, chunk_index, content, section, embedding) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    [(filing.accession, i, contents[i], sections[i], Vector(vecs[i]))
+                     for i in range(len(contents))],
                 )
                 # Evict beyond the cap (oldest first); cascade drops their chunks.
                 cur.execute("DELETE FROM live_filings WHERE accession IN ("
@@ -154,23 +158,26 @@ class LiveEngine:
             return self._cache[filing.accession]
         cached = self._load_cached(filing.accession)
         if cached is not None:
-            contents, vecs = cached
-            idx = IndexedFiling(filing=filing, contents=contents, vecs=vecs)
+            contents, vecs, sections = cached
+            idx = IndexedFiling(filing=filing, contents=contents, vecs=vecs, sections=sections)
             self._cache[filing.accession] = idx
             return idx
         emb = embedder or self.embedder
         text = fetch_filing_text(filing)
+        # section_then_token tags each chunk with its SEC Item header (Item 1A, 7…)
+        # so citations show which part of the filing the answer came from.
         chunks = chunk_document(
             text, self.encoder,
             max_tokens=self.cfg.chunking.max_tokens,
             overlap_tokens=self.cfg.chunking.overlap_tokens,
-            strategy="token",
+            strategy="section_then_token",
         )
         contents = [c.content for c in chunks]
+        sections = [c.section for c in chunks]
         vecs = _normalize(np.asarray(emb.embed(contents), dtype=np.float32))
-        idx = IndexedFiling(filing=filing, contents=contents, vecs=vecs)
+        idx = IndexedFiling(filing=filing, contents=contents, vecs=vecs, sections=sections)
         self._cache[filing.accession] = idx
-        self._save_cached(filing, contents, vecs)  # persist for cold starts
+        self._save_cached(filing, contents, vecs, sections)  # persist for cold starts
         return idx
 
     def _retrieve(self, idx: IndexedFiling, question: str, k: int,
@@ -185,7 +192,8 @@ class LiveEngine:
             RetrievedChunk(
                 chunk_id=int(i), doc_name=doc_name, ticker=None,
                 filing_type=f.form, filing_date=f.filing_date, page=None,
-                section=None, content=idx.contents[int(i)], retrieval_score=float(sims[int(i)]),
+                section=idx.sections[int(i)], content=idx.contents[int(i)],
+                retrieval_score=float(sims[int(i)]),
             )
             for i in top
         ]

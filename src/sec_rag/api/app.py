@@ -81,9 +81,17 @@ app.add_middleware(
 def _byok_secrets(openai_key: str | None, anthropic_key: str | None) -> Secrets | None:
     """Per-request keys (BYOK): if the caller supplies BOTH their OpenAI and
     Anthropic keys, queries run on THEIR accounts. Missing -> None -> the engine's
-    server keys are used (local dev / owner). DATABASE_URL still comes from env."""
+    server keys are used (local dev / owner). DATABASE_URL still comes from env.
+
+    If SEC_RAG_REQUIRE_KEYS is set (cost-safe public mode), a request WITHOUT both
+    keys is rejected (401) instead of falling back to the owner's keys."""
     if openai_key and anthropic_key:
         return Secrets(openai_api_key=openai_key, anthropic_api_key=anthropic_key)
+    if os.environ.get("SEC_RAG_REQUIRE_KEYS"):
+        raise HTTPException(
+            status_code=401,
+            detail="This demo requires your own API keys — add your OpenAI + Anthropic keys (⚙).",
+        )
     return None
 
 
