@@ -12,6 +12,7 @@ the live path identically.
 
 from __future__ import annotations
 
+import re
 import time
 import uuid
 from collections.abc import Iterator
@@ -33,6 +34,19 @@ def _normalize(mat: np.ndarray) -> np.ndarray:
     n = np.linalg.norm(mat, axis=1, keepdims=True)
     n[n == 0] = 1.0
     return mat / n
+
+
+_FORM_8K = re.compile(r"\b(8-?k|press release|announce|acquisition|merger|event|material)\b", re.I)
+_FORM_10Q = re.compile(r"\b(quarter|quarterly|q[1-4]\b|10-?q|three months|most recent quarter)\b", re.I)
+
+
+def detect_form(question: str) -> str:
+    """Pick a filing type from the question. Default annual (10-K)."""
+    if _FORM_8K.search(question):
+        return "8-K"
+    if _FORM_10Q.search(question):
+        return "10-Q"
+    return "10-K"
 
 
 @dataclass
@@ -84,16 +98,19 @@ class LiveEngine:
             for i in top
         ]
 
-    def stream(self, ticker: str, question: str, *, form: str = "10-K",
+    def stream(self, ticker: str, question: str, *, form: str = "auto",
                top_k: int | None = None) -> Iterator[dict]:
         """Resolve -> fetch -> retrieve -> stream the grounded answer.
 
+        ``form`` is "10-K" | "10-Q" | "8-K" | "auto" (pick from the question).
         Yields a 'status' event (which filing was pulled), then 'token' deltas,
         then a final 'done' with citations + metrics. Same shape as
         QueryEngine.stream() plus the status line for the live path.
         """
         k = top_k or self.cfg.retrieval.top_k
         trace_id = uuid.uuid4().hex
+        if not form or form.lower() == "auto":
+            form = detect_form(question)
 
         t0 = time.perf_counter()
         filing = latest_filing(ticker, form)

@@ -28,7 +28,7 @@ class LiveQueryRequest(BaseModel):
     """Live EDGAR path: answer ``query`` over ``ticker``'s most recent ``form``."""
     ticker: str
     query: str
-    form: str = "10-K"
+    form: str = "auto"  # "10-K" | "10-Q" | "8-K" | "auto" (pick from the question)
     top_k: int | None = Field(default=None, ge=1, le=50)
 
 

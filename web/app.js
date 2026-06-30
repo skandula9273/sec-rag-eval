@@ -56,7 +56,7 @@ let busy = false;
 
 // A ticker routes to the live EDGAR path (any company's latest 10-K); blank uses
 // the pre-indexed FinanceBench corpus. Both stream the same event shape.
-async function ask(question, ticker) {
+async function ask(question, ticker, form) {
   if (busy || !question.trim()) return;
   busy = true;
   const live = !!(ticker && ticker.trim());
@@ -76,7 +76,9 @@ async function ask(question, ticker) {
   $("result").scrollIntoView({ behavior: "smooth", block: "start" });
 
   const url = live ? API + "/query/live/stream" : API + "/query/stream";
-  const body = live ? { ticker: ticker.trim(), query: question } : { query: question };
+  const body = live
+    ? { ticker: ticker.trim(), query: question, form: form || "auto" }
+    : { query: question };
 
   let answerText = "";
   try {
@@ -134,14 +136,15 @@ async function ask(question, ticker) {
 // --- Wire up ---
 $("askForm").addEventListener("submit", (e) => {
   e.preventDefault();
-  ask($("queryInput").value, $("tickerInput").value);
+  ask($("queryInput").value, $("tickerInput").value, $("formSelect").value);
 });
 $("chips").addEventListener("click", (e) => {
   if (e.target.classList.contains("chip")) {
     const ticker = e.target.dataset.ticker || "";
     $("tickerInput").value = ticker;
+    if (e.target.dataset.form) $("formSelect").value = e.target.dataset.form;
     $("queryInput").value = e.target.textContent;
-    ask(e.target.textContent, ticker);
+    ask(e.target.textContent, ticker, $("formSelect").value);
   }
 });
 

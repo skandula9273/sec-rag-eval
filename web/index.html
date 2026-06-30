@@ -25,6 +25,12 @@
     <form id="askForm" class="ask">
       <input id="tickerInput" class="ticker-input" type="text" autocomplete="off"
         maxlength="6" placeholder="Ticker" title="e.g. AAPL — blank uses the sample corpus" />
+      <select id="formSelect" class="form-select" title="Filing type">
+        <option value="auto">Auto</option>
+        <option value="10-K">10-K</option>
+        <option value="10-Q">10-Q</option>
+        <option value="8-K">8-K</option>
+      </select>
       <span class="ask-divider"></span>
       <input
         id="queryInput"
@@ -36,8 +42,9 @@
       <button id="askBtn" class="ask-btn" type="submit">Ask →</button>
     </form>
     <p class="ask-hint">
-      Enter a <b>ticker</b> (AAPL, NVDA, TSLA…) to query that company’s latest 10-K
-      <b>live from EDGAR</b> — or leave it blank to use the pre-indexed sample corpus.
+      Enter a <b>ticker</b> (AAPL, NVDA, TSLA…) + filing type to query that company’s
+      latest <b>10-K / 10-Q / 8-K live from EDGAR</b> (Auto picks from your question) —
+      or leave the ticker blank to use the pre-indexed sample corpus.
     </p>
 
     <div class="quicklinks">

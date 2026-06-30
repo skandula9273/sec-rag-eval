@@ -152,6 +152,16 @@ html, body {
   padding: 8px 2px 8px 4px;
 }
 .ticker-input::placeholder { color: #9bb5b0; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.form-select {
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 2px;
+}
 .ask-divider { width: 1px; align-self: stretch; background: var(--border); margin: 4px 2px; }
 .ask-hint { color: var(--muted); font-size: 12.5px; margin: 10px auto 0; max-width: 560px; }
 .ask-hint b { color: var(--accent); font-weight: 600; }
