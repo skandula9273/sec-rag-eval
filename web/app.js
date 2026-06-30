@@ -1,59 +1,19 @@
 // SEC Filings RAG — static frontend.
 // Calls the deployed FastAPI service's /query/stream (SSE) and renders the
-// streamed answer + sources + metrics. The API access key lives only in this
-// browser's localStorage and is sent as the X-API-Key header.
+// streamed answer + sources + metrics. No API key / settings: the API is open
+// for now (auth is added back later).
 
-// Local preview auto-points at the local API (where the X-API-Key guard is off);
-// the deployed Pages site uses the Cloud Run API (guard on -> needs a key).
+const BUILD = "v9 · no-key";
+
 const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
-const DEFAULT_API = IS_LOCAL
+const API = IS_LOCAL
   ? "http://localhost:8000"
   : "https://sec-rag-api-200217758117.us-east1.run.app";
 
-// TEMP (testing only): hardcoded gate key so the tool works with no setup.
-// SECURITY: this is a PUBLIC repo — rotate SEC_RAG_API_KEY and delete this line
-// when done testing (the key in git history is then dead/worthless).
-const HARDCODED_KEY = "_LielMdEuNfPctnYsUuRO7ZZ7Xbw_kMM";
-
-// Build marker — proves WHICH app.js actually executed in your browser.
-const BUILD = "v8 · hardcoded-key";
-
 const $ = (id) => document.getElementById(id);
-const getKey = () => localStorage.getItem("secrag_key") || HARDCODED_KEY;
-const getApi = () => localStorage.getItem("secrag_api") || DEFAULT_API;
-
-// --- Settings modal ---
-function openModal() {
-  $("keyInput").value = getKey();
-  $("urlInput").value = getApi();
-  $("modal").hidden = false;
-  setTimeout(() => $("keyInput").focus(), 0);
-}
-function closeModal() { $("modal").hidden = true; }
-
-// A question the user tried before entering a key — re-run it after they save.
-let pendingQuestion = null;
-
-$("settingsBtn").onclick = openModal;
-$("settingsBtn2").onclick = openModal;
-$("closeModal").onclick = closeModal;
-// Never trap the user: click the backdrop or press Escape to dismiss the modal.
-$("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
-$("saveKey").onclick = () => {
-  localStorage.setItem("secrag_key", $("keyInput").value.trim());
-  const url = $("urlInput").value.trim();
-  localStorage.setItem("secrag_api", url || DEFAULT_API);
-  closeModal();
-  // Forward motion: if a question was waiting on the key, run it now.
-  const q = pendingQuestion || $("queryInput").value;
-  pendingQuestion = null;
-  if (q && q.trim()) ask(q);
-};
 
 // --- Render helpers ---
 function linkifyCitations(text) {
-  // Wrap [n] citation markers so they stand out in the answer.
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML.replace(/\[(\d+)\]/g, '<span class="cite">[$1]</span>');
@@ -96,28 +56,12 @@ let busy = false;
 
 async function ask(question) {
   if (busy || !question.trim()) return;
-  if (!getKey() && !IS_LOCAL) {        // local API guard is off, so only gate remotely
-    pendingQuestion = question;
-    $("queryInput").value = question;  // keep it visible
-    // Non-blocking nudge instead of a forced modal — the page stays usable.
-    $("result").hidden = false;
-    $("error").hidden = false;
-    $("answer").innerHTML = "";
-    $("sources").innerHTML = "";
-    $("metrics").innerHTML = "";
-    $("faithBadge").textContent = "—";
-    $("error").innerHTML =
-      '🔑 Add your API access key to run this — click <b>⚙ API key</b> above. ' +
-      "It’s stored only in your browser; you can browse the page freely without it.";
-    openModal();  // opened for convenience, but fully dismissable (Esc / click outside)
-    return;
-  }
   busy = true;
 
   $("result").hidden = false;
   $("error").hidden = true;
   $("error").textContent = "";
-  $("answer").innerHTML = "";
+  $("answer").innerHTML = "Thinking… (first request after idle can take ~15–25s)";
   $("sources").innerHTML = "";
   $("metrics").innerHTML = "";
   $("faithBadge").textContent = "…";
@@ -126,15 +70,12 @@ async function ask(question) {
 
   let answerText = "";
   try {
-    const res = await fetch(getApi() + "/query/stream", {
+    const res = await fetch(API + "/query/stream", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-Key": getKey() },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: question }),
     });
-    if (!res.ok) {
-      const detail = res.status === 401 ? "invalid or missing API key" : `HTTP ${res.status}`;
-      throw new Error(detail);
-    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -169,6 +110,7 @@ async function ask(question) {
   } catch (e) {
     $("error").hidden = false;
     $("error").textContent = "Request failed: " + e.message;
+    $("answer").innerHTML = "";
     $("faithBadge").textContent = "—";
   } finally {
     busy = false;
@@ -181,11 +123,6 @@ $("askForm").addEventListener("submit", (e) => {
   e.preventDefault();
   ask($("queryInput").value);
 });
-// Clicking into the search box prompts for the key + base URL (until one is set),
-// so the homepage loads first and the key popup appears on first interaction.
-$("queryInput").addEventListener("focus", () => {
-  if (!getKey() && !IS_LOCAL && $("modal").hidden) openModal();
-});
 $("chips").addEventListener("click", (e) => {
   if (e.target.classList.contains("chip")) {
     $("queryInput").value = e.target.textContent;
@@ -193,6 +130,5 @@ $("chips").addEventListener("click", (e) => {
   }
 });
 
-// Stamp the build marker once the script runs, so you can see which version loaded.
 const _b = $("build");
 if (_b) _b.textContent = "build " + BUILD + (IS_LOCAL ? " · local" : "");

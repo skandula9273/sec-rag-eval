@@ -9,14 +9,13 @@
   <title>SEC Filings RAG — grounded answers over 10-K filings</title>
   <meta name="description" content="Ask SEC 10-K filings. Dense retrieval over a vector-indexed corpus, grounded cited answers, streamed." />
   <!-- ?v= cache-buster: bump on every asset change so the new JS/CSS actually loads. -->
-  <link rel="stylesheet" href="./style.css?v=8" />
+  <link rel="stylesheet" href="./style.css?v=9" />
 </head>
 <body>
   <div class="horizon" aria-hidden="true"></div>
 
   <header class="topbar">
     <span class="badge">● Powered by FinanceBench · dense + Claude · grounded RAG</span>
-    <button id="settingsBtn" class="icon-btn" title="API settings" aria-label="API settings">⚙</button>
   </header>
 
   <main class="hero">
@@ -36,7 +35,6 @@
 
     <div class="quicklinks">
       <a class="ghost-btn" href="https://github.com/skandula9273/sec-rag-eval" target="_blank" rel="noopener">◆ View on GitHub</a>
-      <button id="settingsBtn2" class="ghost-btn" type="button">⚙ API key</button>
     </div>
 
     <div class="chips" id="chips">
@@ -64,30 +62,7 @@
     </div>
   </section>
 
-  <!-- API key / settings modal -->
-  <div id="modal" class="modal" hidden>
-    <div class="modal-card">
-      <h2>API settings</h2>
-      <p class="modal-note">
-        Optional for browsing — a key is only needed to <em>run</em> a query. It is
-        stored only in this browser (localStorage) and sent only to the API as an
-        <code>X-API-Key</code> header. Never committed or shared. Press Esc or click
-        outside to close.
-      </p>
-      <label>API access key
-        <input id="keyInput" type="password" placeholder="X-API-Key for the SEC-RAG API" />
-      </label>
-      <label>API base URL
-        <input id="urlInput" type="text" placeholder="https://…run.app" />
-      </label>
-      <div class="modal-actions">
-        <button id="saveKey" class="ask-btn" type="button">Save</button>
-        <button id="closeModal" class="ghost-btn" type="button">Close</button>
-      </div>
-    </div>
-  </div>
-
   <div id="build" class="build">build …</div>
-  <script src="./app.js?v=8"></script>
+  <script src="./app.js?v=9"></script>
 </body>
 </html>
