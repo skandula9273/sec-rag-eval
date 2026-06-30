@@ -9,13 +9,14 @@
   <title>SEC Filings RAG — grounded answers over 10-K filings</title>
   <meta name="description" content="Ask SEC 10-K filings. Dense retrieval over a vector-indexed corpus, grounded cited answers, streamed." />
   <!-- ?v= cache-buster: bump on every asset change so the new JS/CSS actually loads. -->
-  <link rel="stylesheet" href="./style.css?v=10" />
+  <link rel="stylesheet" href="./style.css?v=11" />
 </head>
 <body>
   <div class="horizon" aria-hidden="true"></div>
 
   <header class="topbar">
-    <span class="badge">● Powered by FinanceBench · dense + Claude · grounded RAG</span>
+    <span class="badge">● Powered by FinanceBench + live EDGAR · grounded RAG</span>
+    <button id="settingsBtn" class="icon-btn" title="Use your own API keys (optional)" aria-label="API keys">⚙</button>
   </header>
 
   <main class="hero">
@@ -77,7 +78,30 @@
     </div>
   </section>
 
+  <!-- BYOK: optional own-keys modal. Both blank = use the demo's shared keys. -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card">
+      <h2>Use your own API keys</h2>
+      <p class="modal-note">
+        <b>Optional.</b> Leave blank to use the demo. If you enter <b>both</b>, every
+        query runs on <b>your</b> OpenAI + Anthropic accounts (your credits, not the
+        owner's). Stored only in this browser; sent only to the API over HTTPS, never
+        saved server-side. Press Esc or click outside to close.
+      </p>
+      <label>OpenAI API key
+        <input id="openaiKey" type="password" autocomplete="off" placeholder="sk-…" />
+      </label>
+      <label>Anthropic API key
+        <input id="anthropicKey" type="password" autocomplete="off" placeholder="sk-ant-…" />
+      </label>
+      <div class="modal-actions">
+        <button id="saveKeys" class="ask-btn" type="button">Save</button>
+        <button id="closeModal" class="ghost-btn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
   <div id="build" class="build">build …</div>
-  <script src="./app.js?v=10"></script>
+  <script src="./app.js?v=11"></script>
 </body>
 </html>

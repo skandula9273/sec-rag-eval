@@ -3,7 +3,7 @@
 // streamed answer + sources + metrics. No API key / settings: the API is open
 // for now (auth is added back later).
 
-const BUILD = "v10 · live-edgar";
+const BUILD = "v11 · byok";
 
 const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 const API = IS_LOCAL
@@ -11,6 +11,25 @@ const API = IS_LOCAL
   : "https://sec-rag-api-200217758117.us-east1.run.app";
 
 const $ = (id) => document.getElementById(id);
+
+// --- BYOK: optional own keys, stored only in this browser ---
+const getOA = () => localStorage.getItem("secrag_oa") || "";
+const getAN = () => localStorage.getItem("secrag_an") || "";
+function openModal() {
+  $("openaiKey").value = getOA();
+  $("anthropicKey").value = getAN();
+  $("modal").hidden = false;
+}
+function closeModal() { $("modal").hidden = true; }
+$("settingsBtn").onclick = openModal;
+$("closeModal").onclick = closeModal;
+$("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+$("saveKeys").onclick = () => {
+  localStorage.setItem("secrag_oa", $("openaiKey").value.trim());
+  localStorage.setItem("secrag_an", $("anthropicKey").value.trim());
+  closeModal();
+};
 
 // --- Render helpers ---
 function linkifyCitations(text) {
@@ -80,11 +99,18 @@ async function ask(question, ticker, form) {
     ? { ticker: ticker.trim(), query: question, form: form || "auto" }
     : { query: question };
 
+  // BYOK: if both keys are set, send them so the query runs on the user's accounts.
+  const headers = { "Content-Type": "application/json" };
+  if (getOA() && getAN()) {
+    headers["X-OpenAI-Key"] = getOA();
+    headers["X-Anthropic-Key"] = getAN();
+  }
+
   let answerText = "";
   try {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

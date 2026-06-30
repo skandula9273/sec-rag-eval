@@ -66,10 +66,15 @@ class LiveEngine:
         self.encoder = tiktoken_encoder(cfg.chunking.encoder)
         self._cache: dict[str, IndexedFiling] = {}
 
-    def _index(self, filing: Filing) -> IndexedFiling:
-        """Fetch + chunk + embed a filing (cached by accession)."""
+    def _index(self, filing: Filing, embedder: Embedder | None = None) -> IndexedFiling:
+        """Fetch + chunk + embed a filing (cached by accession).
+
+        Embeddings are model-specific, not key-specific, so a filing indexed with
+        one caller's key is safely reused for any caller on the same model.
+        """
         if filing.accession in self._cache:
             return self._cache[filing.accession]
+        emb = embedder or self.embedder
         text = fetch_filing_text(filing)
         chunks = chunk_document(
             text, self.encoder,
@@ -78,13 +83,15 @@ class LiveEngine:
             strategy="token",
         )
         contents = [c.content for c in chunks]
-        vecs = _normalize(np.asarray(self.embedder.embed(contents), dtype=np.float32))
+        vecs = _normalize(np.asarray(emb.embed(contents), dtype=np.float32))
         idx = IndexedFiling(filing=filing, contents=contents, vecs=vecs)
         self._cache[filing.accession] = idx
         return idx
 
-    def _retrieve(self, idx: IndexedFiling, question: str, k: int) -> list[RetrievedChunk]:
-        qv = _normalize(np.asarray([self.embedder.embed_one(question)], dtype=np.float32))[0]
+    def _retrieve(self, idx: IndexedFiling, question: str, k: int,
+                  embedder: Embedder | None = None) -> list[RetrievedChunk]:
+        emb = embedder or self.embedder
+        qv = _normalize(np.asarray([emb.embed_one(question)], dtype=np.float32))[0]
         sims = idx.vecs @ qv
         top = np.argsort(-sims)[:k]
         f = idx.filing
@@ -99,18 +106,23 @@ class LiveEngine:
         ]
 
     def stream(self, ticker: str, question: str, *, form: str = "auto",
-               top_k: int | None = None) -> Iterator[dict]:
+               top_k: int | None = None, secrets: Secrets | None = None) -> Iterator[dict]:
         """Resolve -> fetch -> retrieve -> stream the grounded answer.
 
         ``form`` is "10-K" | "10-Q" | "8-K" | "auto" (pick from the question).
-        Yields a 'status' event (which filing was pulled), then 'token' deltas,
-        then a final 'done' with citations + metrics. Same shape as
-        QueryEngine.stream() plus the status line for the live path.
+        ``secrets`` overrides the engine's keys (BYOK): the filing + query embed and
+        generation run on the caller's OpenAI/Anthropic keys. Yields a 'status'
+        event (which filing was pulled), then 'token' deltas, then a final 'done'
+        with citations + metrics.
         """
+        from sec_rag.ingest.embed import Embedder
+
         k = top_k or self.cfg.retrieval.top_k
         trace_id = uuid.uuid4().hex
         if not form or form.lower() == "auto":
             form = detect_form(question)
+        gen_secrets = secrets or self.secrets
+        embedder = Embedder(self.cfg.embedding, secrets) if secrets else self.embedder
 
         t0 = time.perf_counter()
         filing = latest_filing(ticker, form)
@@ -118,13 +130,13 @@ class LiveEngine:
         yield {"type": "status",
                "text": f"{filing.company} — {filing.form} filed {filing.filing_date}"
                        + ("" if cached else " (fetching + indexing…)")}
-        idx = self._index(filing)
-        retrieved = self._retrieve(idx, question, k)
+        idx = self._index(filing, embedder)
+        retrieved = self._retrieve(idx, question, k, embedder)
         retrieval_ms = int((time.perf_counter() - t0) * 1000)
 
         t1 = time.perf_counter()
         gen = None
-        for item in generate_answer_stream(question, retrieved, self.cfg.generation, self.secrets):
+        for item in generate_answer_stream(question, retrieved, self.cfg.generation, gen_secrets):
             if isinstance(item, str):
                 yield {"type": "token", "text": item}
             else:

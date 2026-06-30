@@ -21,7 +21,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from sec_rag.config import load_config
+from sec_rag.config import Secrets, load_config
 from sec_rag.pipeline import QueryEngine
 from sec_rag.api.schemas import LiveQueryRequest, QueryRequest, QueryResponse
 
@@ -74,8 +74,17 @@ app.add_middleware(
     allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-API-Key"],
+    allow_headers=["Content-Type", "X-API-Key", "X-OpenAI-Key", "X-Anthropic-Key"],
 )
+
+
+def _byok_secrets(openai_key: str | None, anthropic_key: str | None) -> Secrets | None:
+    """Per-request keys (BYOK): if the caller supplies BOTH their OpenAI and
+    Anthropic keys, queries run on THEIR accounts. Missing -> None -> the engine's
+    server keys are used (local dev / owner). DATABASE_URL still comes from env."""
+    if openai_key and anthropic_key:
+        return Secrets(openai_api_key=openai_key, anthropic_api_key=anthropic_key)
+    return None
 
 
 @app.get("/health")
@@ -96,23 +105,28 @@ def query(req: QueryRequest) -> QueryResponse:
 
 
 @app.post("/query/stream", dependencies=[Depends(require_api_key)])
-def query_stream(req: QueryRequest) -> StreamingResponse:
+def query_stream(
+    req: QueryRequest,
+    x_openai_key: str | None = Header(default=None),
+    x_anthropic_key: str | None = Header(default=None),
+) -> StreamingResponse:
     """Server-Sent Events stream for low time-to-first-token.
 
     Emits `data: {"type":"token","text":...}` per answer delta, then
     `data: {"type":"done","response": <QueryResponse>}`, then `data: [DONE]`.
     No faithfulness judge on this path (it can't stream). Same retrieval + answer
-    as /query.
+    as /query. BYOK: X-OpenAI-Key + X-Anthropic-Key run it on the caller's keys.
     """
     engine: QueryEngine | None = _state["engine"]
     if engine is None:
         raise HTTPException(status_code=503, detail=f"engine not ready: {_state['error']}")
     if not req.query.strip():
         raise HTTPException(status_code=422, detail="query must not be empty")
+    secrets = _byok_secrets(x_openai_key, x_anthropic_key)
 
     def sse():
         try:
-            for ev in engine.stream(req.query, top_k=req.top_k):
+            for ev in engine.stream(req.query, top_k=req.top_k, secrets=secrets):
                 if ev["type"] == "token":
                     yield f"data: {json.dumps({'type': 'token', 'text': ev['text']})}\n\n"
                 else:
@@ -126,22 +140,29 @@ def query_stream(req: QueryRequest) -> StreamingResponse:
 
 
 @app.post("/query/live/stream", dependencies=[Depends(require_api_key)])
-def query_live_stream(req: LiveQueryRequest) -> StreamingResponse:
+def query_live_stream(
+    req: LiveQueryRequest,
+    x_openai_key: str | None = Header(default=None),
+    x_anthropic_key: str | None = Header(default=None),
+) -> StreamingResponse:
     """Live EDGAR path: fetch ``ticker``'s most recent ``form`` and answer over it.
 
     SSE: a `status` event (which filing was pulled), then `token` deltas, then
     `done` with citations + metrics, then `[DONE]`. Any company in EDGAR; the
-    filing is fetched + indexed on demand (cached by accession).
+    filing is fetched + indexed on demand (cached by accession). BYOK:
+    X-OpenAI-Key + X-Anthropic-Key run it on the caller's keys.
     """
     live = _state["live"]
     if live is None:
         raise HTTPException(status_code=503, detail=f"engine not ready: {_state['error']}")
     if not req.query.strip() or not req.ticker.strip():
         raise HTTPException(status_code=422, detail="ticker and query are required")
+    secrets = _byok_secrets(x_openai_key, x_anthropic_key)
 
     def sse():
         try:
-            for ev in live.stream(req.ticker, req.query, form=req.form, top_k=req.top_k):
+            for ev in live.stream(req.ticker, req.query, form=req.form,
+                                  top_k=req.top_k, secrets=secrets):
                 if ev["type"] == "done":
                     payload = {"type": "done", "response": ev["response"].model_dump()}
                     yield f"data: {json.dumps(payload)}\n\n"

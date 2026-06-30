@@ -120,18 +120,21 @@ class QueryEngine:
             self.conn = new_connection(self.secrets, autocommit=True)
             return self._search(query, qvec, k)
 
-    def retrieve(self, query: str, top_k: int | None = None) -> tuple[list[RetrievedChunk], int]:
+    def retrieve(
+        self, query: str, top_k: int | None = None, embedder: Embedder | None = None
+    ) -> tuple[list[RetrievedChunk], int]:
         """Embed the query and retrieve top-k chunks — no generation.
 
         The retrieval half of run(), exposed so the eval harness can measure
         recall@k / MRR (pure retrieval metrics) without the Anthropic generation
         + faithfulness calls. The path is identical to the one run() and the API
         use, so the recall it measures is the recall a user's query gets — it
-        just stops before generation.
+        just stops before generation. ``embedder`` overrides the engine's default
+        (BYOK: embed the query with the caller's OpenAI key).
         """
         k = top_k or self.cfg.retrieval.top_k
         t0 = time.perf_counter()
-        qvec = self.embedder.embed_one(query)
+        qvec = (embedder or self.embedder).embed_one(query)
         retrieved = self._retrieve(query, qvec, k)
         retrieval_ms = int((time.perf_counter() - t0) * 1000)
         return retrieved, retrieval_ms
@@ -185,21 +188,27 @@ class QueryEngine:
         )
         return PipelineResult(response=response, retrieved=retrieved)
 
-    def stream(self, query: str, top_k: int | None = None) -> Iterator[dict]:
+    def stream(
+        self, query: str, top_k: int | None = None, secrets: Secrets | None = None
+    ) -> Iterator[dict]:
         """Stream a response for low time-to-first-token.
 
         Yields ``{"type": "token", "text": ...}`` for each answer delta as the
         model produces it, then a final ``{"type": "done", "response":
         QueryResponse}`` carrying citations + metrics. Retrieval is the SAME path
         as run(); the faithfulness judge is off (it can't stream and isn't on the
-        UX path). Used by the API's /query/stream endpoint.
+        UX path). Used by the API's /query/stream endpoint. ``secrets`` overrides
+        the engine's keys (BYOK): the query embed + generation run on the caller's
+        OpenAI/Anthropic keys; the DB connection (key-independent) is reused.
         """
         trace_id = uuid.uuid4().hex
-        retrieved, retrieval_ms = self.retrieve(query, top_k)
+        gen_secrets = secrets or self.secrets
+        embedder = Embedder(self.cfg.embedding, secrets) if secrets else self.embedder
+        retrieved, retrieval_ms = self.retrieve(query, top_k, embedder=embedder)
 
         t1 = time.perf_counter()
         gen = None
-        for item in generate_answer_stream(query, retrieved, self.cfg.generation, self.secrets):
+        for item in generate_answer_stream(query, retrieved, self.cfg.generation, gen_secrets):
             if isinstance(item, str):
                 yield {"type": "token", "text": item}
             else:
