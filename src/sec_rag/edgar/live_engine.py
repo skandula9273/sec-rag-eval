@@ -59,21 +59,91 @@ class IndexedFiling:
 class LiveEngine:
     """On-demand RAG over EDGAR. One embedder; an accession-keyed filing cache."""
 
+    # Keep the newest N embedded filings in Neon (bounded so the free tier holds).
+    _CACHE_CAP = 40
+
     def __init__(self, cfg: Config, secrets: Secrets | None = None):
         self.cfg = cfg
         self.secrets = secrets or Secrets()
         self.embedder = Embedder(cfg.embedding, self.secrets)
         self.encoder = tiktoken_encoder(cfg.chunking.encoder)
-        self._cache: dict[str, IndexedFiling] = {}
+        self._cache: dict[str, IndexedFiling] = {}  # in-process (warm instance)
+        self._conn = None
+        self._init_cache_db()
+
+    def _init_cache_db(self):
+        """Best-effort: a Neon-backed cache so a cold start reuses embedded filings.
+
+        Persisting embeddings across instances/cold starts makes repeat questions
+        about the same filing instant (no re-fetch, no re-embed). All failures are
+        swallowed — the cache is an optimization, never required for a query.
+        """
+        try:
+            from sec_rag.db.pool import new_connection
+            self._conn = new_connection(self.secrets, autocommit=True)
+            dim = self.cfg.embedding.dim
+            with self._conn.cursor() as cur:
+                cur.execute("CREATE TABLE IF NOT EXISTS live_filings ("
+                            "accession TEXT PRIMARY KEY, cached_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+                cur.execute(f"CREATE TABLE IF NOT EXISTS live_chunks ("
+                            "accession TEXT REFERENCES live_filings(accession) ON DELETE CASCADE, "
+                            "chunk_index INT, content TEXT, "
+                            f"embedding vector({dim}), PRIMARY KEY (accession, chunk_index))")
+        except Exception:
+            self._conn = None  # caching disabled; queries still work
+
+    def _load_cached(self, accession: str) -> IndexedFiling | None:
+        if self._conn is None:
+            return None
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute("SELECT content, embedding FROM live_chunks "
+                            "WHERE accession = %s ORDER BY chunk_index", (accession,))
+                rows = cur.fetchall()
+            if not rows:
+                return None
+            contents = [r[0] for r in rows]
+            vecs = np.asarray([r[1] for r in rows], dtype=np.float32)  # stored normalized
+            return contents, vecs
+        except Exception:
+            return None
+
+    def _save_cached(self, filing: Filing, contents: list[str], vecs: np.ndarray):
+        if self._conn is None:
+            return
+        try:
+            from pgvector import Vector
+            with self._conn.cursor() as cur:
+                cur.execute("INSERT INTO live_filings (accession) VALUES (%s) "
+                            "ON CONFLICT (accession) DO UPDATE SET cached_at = now()",
+                            (filing.accession,))
+                cur.execute("DELETE FROM live_chunks WHERE accession = %s", (filing.accession,))
+                cur.executemany(
+                    "INSERT INTO live_chunks (accession, chunk_index, content, embedding) "
+                    "VALUES (%s, %s, %s, %s)",
+                    [(filing.accession, i, contents[i], Vector(vecs[i])) for i in range(len(contents))],
+                )
+                # Evict beyond the cap (oldest first); cascade drops their chunks.
+                cur.execute("DELETE FROM live_filings WHERE accession IN ("
+                            "SELECT accession FROM live_filings ORDER BY cached_at DESC OFFSET %s)",
+                            (self._CACHE_CAP,))
+        except Exception:
+            pass  # cache write failed; not fatal
 
     def _index(self, filing: Filing, embedder: Embedder | None = None) -> IndexedFiling:
-        """Fetch + chunk + embed a filing (cached by accession).
+        """Fetch + chunk + embed a filing. Cached in-process and in Neon by accession.
 
         Embeddings are model-specific, not key-specific, so a filing indexed with
         one caller's key is safely reused for any caller on the same model.
         """
         if filing.accession in self._cache:
             return self._cache[filing.accession]
+        cached = self._load_cached(filing.accession)
+        if cached is not None:
+            contents, vecs = cached
+            idx = IndexedFiling(filing=filing, contents=contents, vecs=vecs)
+            self._cache[filing.accession] = idx
+            return idx
         emb = embedder or self.embedder
         text = fetch_filing_text(filing)
         chunks = chunk_document(
@@ -86,6 +156,7 @@ class LiveEngine:
         vecs = _normalize(np.asarray(emb.embed(contents), dtype=np.float32))
         idx = IndexedFiling(filing=filing, contents=contents, vecs=vecs)
         self._cache[filing.accession] = idx
+        self._save_cached(filing, contents, vecs)  # persist for cold starts
         return idx
 
     def _retrieve(self, idx: IndexedFiling, question: str, k: int,
