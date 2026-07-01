@@ -12,7 +12,7 @@ companies.
 
 ## ▶ Live demo
 
-**https://skandula9273.github.io/sec-rag-eval/**
+**https://sec-rag-web-200217758117.us-east1.run.app**
 
 Enter a ticker (AAPL, NVDA, TSLA…) and ask — it pulls that company's latest
 **10-K / 10-Q / 8-K live from EDGAR** (auto-detected from your question), indexes

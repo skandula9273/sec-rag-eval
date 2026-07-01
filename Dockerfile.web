@@ -1,0 +1,9 @@
+# Static frontend served with no-cache headers (Cloud Run) — a cache-proof
+# alternative to GitHub Pages (whose fixed HTML cache caused stale-page confusion).
+FROM python:3.11-slim
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+COPY web ./web
+COPY web_server.py ./
+EXPOSE 8080
+CMD ["python", "web_server.py"]
