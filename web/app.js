@@ -3,7 +3,7 @@
 // streamed answer + sources + metrics. No API key / settings: the API is open
 // for now (auth is added back later).
 
-const BUILD = "v14 · ratelimit+polish";
+const BUILD = "v15 · modal-fix";
 
 const IS_LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
 const API = IS_LOCAL

@@ -295,6 +295,10 @@ html, body {
 .metrics b { color: var(--text); font-weight: 600; }
 
 /* --- Modal --- */
+/* The [hidden] attribute must win over .modal's display:flex, or the modal shows
+   on every load (this was the "API settings popup keeps coming up" bug). */
+[hidden] { display: none !important; }
+
 .modal {
   position: fixed;
   inset: 0;
