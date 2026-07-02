@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Force revalidation so browsers/CDN don't serve a stale page during testing. -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <title>SEC Filings RAG — grounded answers over 10-K filings</title>
+  <meta name="description" content="Ask SEC 10-K filings. Dense retrieval over a vector-indexed corpus, grounded cited answers, streamed." />
+  <!-- ?v= cache-buster: bump on every asset change so the new JS/CSS actually loads. -->
+  <link rel="stylesheet" href="./style.css?v=15" />
+</head>
+<body>
+  <div class="horizon" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <span class="badge">● Powered by FinanceBench + live EDGAR · grounded RAG</span>
+    <button id="settingsBtn" class="icon-btn" title="Use your own API keys (optional)" aria-label="API keys">⚙</button>
+  </header>
+
+  <main class="hero">
+    <h1 class="headline">What will you <em>discover</em> today?</h1>
+    <p class="subhead">Ask SEC 10-K filings — grounded, cited answers over a vector-indexed corpus.</p>
+
+    <form id="askForm" class="ask">
+      <input id="tickerInput" class="ticker-input" type="text" autocomplete="off"
+        maxlength="6" placeholder="Ticker" title="e.g. AAPL — blank uses the sample corpus" />
+      <select id="formSelect" class="form-select" title="Filing type">
+        <option value="auto">Auto</option>
+        <option value="10-K">10-K</option>
+        <option value="10-Q">10-Q</option>
+        <option value="8-K">8-K</option>
+      </select>
+      <span class="ask-divider"></span>
+      <input
+        id="queryInput"
+        class="ask-input"
+        type="text"
+        autocomplete="off"
+        placeholder="Ask about a 10-K — e.g. “What was total revenue last year?”"
+      />
+      <button id="askBtn" class="ask-btn" type="submit">Ask →</button>
+    </form>
+    <p class="ask-hint">
+      Enter a <b>ticker</b> (AAPL, NVDA, TSLA…) to query that company’s latest
+      <b>10-K / 10-Q / 8-K live from EDGAR</b> — ask to <b>compare</b> across years
+      and it pulls multiple filings. Leave the ticker blank for the sample corpus.
+    </p>
+
+    <div class="quicklinks">
+      <a class="ghost-btn" href="https://github.com/skandula9273/sec-rag-eval" target="_blank" rel="noopener">◆ View on GitHub</a>
+    </div>
+
+    <div class="chips" id="chips">
+      <button class="chip" data-ticker="NVDA">What was total revenue in the most recent fiscal year?</button>
+      <button class="chip" data-ticker="AAPL">How did total revenue change compared to the prior year?</button>
+      <button class="chip" data-ticker="MSFT">Summarize the most recent 8-K event.</button>
+      <button class="chip" data-ticker="TSLA">Compare net income this year versus last year.</button>
+    </div>
+  </main>
+
+  <!-- Answer panel (hidden until a question is asked) -->
+  <section id="result" class="result" hidden>
+    <div class="result-card">
+      <div class="result-head">
+        <h2>Answer</h2>
+        <span id="faithBadge" class="faith-badge" title="Faithfulness (self-grade)">—</span>
+      </div>
+      <div id="status" class="status" hidden></div>
+      <div id="answer" class="answer"></div>
+      <div id="error" class="error" hidden></div>
+
+      <h3 class="sources-title">Sources</h3>
+      <div id="sources" class="sources"></div>
+
+      <div id="metrics" class="metrics"></div>
+    </div>
+  </section>
+
+  <!-- BYOK: optional own-keys modal. Both blank = use the demo's shared keys. -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card">
+      <h2>Use your own API keys</h2>
+      <p class="modal-note">
+        <b>Optional.</b> Leave blank to use the demo. If you enter <b>both</b>, every
+        query runs on <b>your</b> OpenAI + Anthropic accounts (your credits, not the
+        owner's). Stored only in this browser; sent only to the API over HTTPS, never
+        saved server-side. Press Esc or click outside to close.
+      </p>
+      <label>OpenAI API key
+        <input id="openaiKey" type="password" autocomplete="off" placeholder="sk-…" />
+      </label>
+      <label>Anthropic API key
+        <input id="anthropicKey" type="password" autocomplete="off" placeholder="sk-ant-…" />
+      </label>
+      <div class="modal-actions">
+        <button id="saveKeys" class="ask-btn" type="button">Save</button>
+        <button id="closeModal" class="ghost-btn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="build" class="build">build …</div>
+  <script src="./app.js?v=15"></script>
+</body>
+</html>
