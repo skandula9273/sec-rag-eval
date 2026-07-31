@@ -80,6 +80,28 @@ chunks) were measured and rejected. The full table and the reasoning are in
 [`docs/versions.md`](docs/versions.md) and the decisions/steps narrative in
 [`docs/decisions-and-steps.md`](docs/decisions-and-steps.md).
 
+### Answer accuracy (is the final answer right, not just retrieved?)
+
+Recall says nothing about whether the *answer* matches FinanceBench's gold. Scored
+on all 150 (`make eval … --accuracy`; LLM judge = Haiku, recorded in the JSON;
+`eval_results/financebench_20260731T111452Z.json`, 0 errors):
+
+| Metric | Value | Basis |
+|---|---|---|
+| LLM-graded accuracy (of attempted) | **0.76** | 71 / 94 answered |
+| LLM-graded accuracy (over all 150) | **0.47** | refusals counted as not-correct |
+| numeric-exact accuracy | **0.83** | 40 / 48 single-figure golds |
+| **refusal rate** | **0.37** | 56 / 150 |
+
+The two accuracy numbers differ by exactly the **refusal rate, reported separately
+on purpose**: the grounded prompt declines ("I cannot answer this from the provided
+sources") rather than guessing when the evidence isn't retrieved — so ~37% go
+unanswered, tracking the recall gap (recall@5 0.64). Right ~76% of what it attempts,
+but honest about the third it can't. Per-category numbers and the numeric-normalizer
+rules (currency/scale/sign/percent, `$1.2B = 1,200 million`) are in the JSON and
+[`src/sec_rag/eval/answer_accuracy.py`](src/sec_rag/eval/answer_accuracy.py). Note
+this measures accuracy as-is — retrieval was **not** tuned to raise it.
+
 ## Architecture
 
 The API and the eval harness call the **same** engine — eval can't drift from
@@ -143,7 +165,7 @@ in `web/`) — it auto-points at the local API. Cloud Run deploy: [`DEPLOY.md`](
 ## Notes
 
 - **Reproducible:** fixed seed (13), temp 0, pinned `requirements.lock`, eval JSON
-  committed per run. 67 test functions (71 `pytest` cases — one is parametrized)
+  committed per run. 76 test functions (90 `pytest` cases — two are parametrized)
   cover the pure logic.
 - **License:** FinanceBench is CC-BY-NC-4.0 — non-commercial portfolio work; PDFs
   are not redistributed (`data/` is gitignored).

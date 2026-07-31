@@ -1,0 +1,140 @@
+{
+  "timestamp": "2026-07-31T11:14:52.850886+00:00",
+  "n_questions": 150,
+  "n_scored": 150,
+  "match_mode": "fuzzy",
+  "mode": "accuracy",
+  "config": {
+    "chunking": {
+      "strategy": "token",
+      "max_tokens": 1024,
+      "overlap_tokens": 64,
+      "encoder": "cl100k_base"
+    },
+    "embedding_model": "text-embedding-3-large",
+    "retrieval": {
+      "method": "dense",
+      "top_k": 5,
+      "distance": "cosine",
+      "candidates": 20,
+      "k_rrf": 60,
+      "dense_weight": 0.5,
+      "rerank": false,
+      "rerank_model": "BAAI/bge-reranker-base"
+    },
+    "generation_model": "claude-haiku-4-5",
+    "seed": 13
+  },
+  "recall_at_k": {
+    "recall@5": 0.64,
+    "recall@10": 0.7467
+  },
+  "mrr": 0.4923,
+  "latency_ms": {
+    "p50": 2878.0,
+    "p95": 5360.0,
+    "p99": 6388.0,
+    "mean": 3172.3
+  },
+  "cost_usd": {
+    "mean_per_query": 0.008744,
+    "total": 1.311609,
+    "is_estimate": false
+  },
+  "per_category_recall": {
+    "domain-relevant": {
+      "recall@5": 0.56,
+      "recall@10": 0.66
+    },
+    "metrics-generated": {
+      "recall@5": 0.7,
+      "recall@10": 0.78
+    },
+    "novel-generated": {
+      "recall@5": 0.66,
+      "recall@10": 0.8
+    }
+  },
+  "faithfulness": {
+    "enabled": true,
+    "mean": null,
+    "n_scored": 0
+  },
+  "answer_accuracy": {
+    "judge_model": "claude-haiku-4-5",
+    "numeric_normalizer": "src/sec_rag/eval/answer_accuracy.py (rules in the docstring)",
+    "overall": {
+      "n": 150,
+      "n_refused": 56,
+      "refusal_rate": 0.3733,
+      "n_answered": 94,
+      "llm": {
+        "n_graded": 94,
+        "n_correct": 71,
+        "accuracy": 0.7553,
+        "accuracy_over_all": 0.4733
+      },
+      "numeric": {
+        "n_applicable": 48,
+        "n_correct": 40,
+        "accuracy": 0.8333
+      }
+    },
+    "per_category": {
+      "domain-relevant": {
+        "n": 50,
+        "n_refused": 22,
+        "refusal_rate": 0.44,
+        "n_answered": 28,
+        "llm": {
+          "n_graded": 28,
+          "n_correct": 18,
+          "accuracy": 0.6429,
+          "accuracy_over_all": 0.36
+        },
+        "numeric": {
+          "n_applicable": 6,
+          "n_correct": 3,
+          "accuracy": 0.5
+        }
+      },
+      "metrics-generated": {
+        "n": 50,
+        "n_refused": 17,
+        "refusal_rate": 0.34,
+        "n_answered": 33,
+        "llm": {
+          "n_graded": 33,
+          "n_correct": 25,
+          "accuracy": 0.7576,
+          "accuracy_over_all": 0.5
+        },
+        "numeric": {
+          "n_applicable": 33,
+          "n_correct": 29,
+          "accuracy": 0.8788
+        }
+      },
+      "novel-generated": {
+        "n": 50,
+        "n_refused": 17,
+        "refusal_rate": 0.34,
+        "n_answered": 33,
+        "llm": {
+          "n_graded": 33,
+          "n_correct": 28,
+          "accuracy": 0.8485,
+          "accuracy_over_all": 0.56
+        },
+        "numeric": {
+          "n_applicable": 9,
+          "n_correct": 8,
+          "accuracy": 0.8889
+        }
+      }
+    }
+  },
+  "questions_without_evidence": 0,
+  "n_errors": 0,
+  "errors": []
+}
