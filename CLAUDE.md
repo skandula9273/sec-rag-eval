@@ -44,8 +44,8 @@ read the code and scrutinize the numbers. Treat every output that way.
   | recall@10 (substring, strict floor) | 0.107 | **0.127** | — |
   | MRR (fuzzy) | 0.317 | **0.492** | — |
   | tables@5 (fuzzy) | 0.32 | **0.70** | — |
-  | faithfulness | 0.941 | **0.929** ✓ | 0.80 |
-  | cost / query | $0.0063 | **$0.009** eval · **$0.0045** live API (measured) | <$0.005 |
+  | faithfulness | 0.941 | **0.934** ✓ (concise prompt; 0.929 verbose) | 0.80 |
+  | cost / query | $0.0063 | **$0.0087** eval · **$0.0045** live API (measured) | <$0.005 |
   | p95 latency (e2e) | ~15.6 s | **15.3 s** eval · live API **p50 2.1 s / p95 6.2 s** (measured) | <2.5 s (p50 ✓, p95 ✗) |
 
   **Read recall as a bracket, not a point.** fuzzy(0.5) is a set token-overlap hit
@@ -57,9 +57,13 @@ read the code and scrutinize the numbers. Treat every output that way.
   signal, not a fuzzy-overlap artifact. Substring floor (v2, 150 q):
   `eval_results/financebench_20260730T232517Z.json`.
 
-  Full v2 baseline: `eval_results/financebench_20260629T193049Z.json` (150 q,
-  full pipeline, 0 errors). Cost/latency above are EVAL numbers (top_k=10 + judge
-  on); the **live API** runs top_k=5 + judge off (faithfulness opt-in), so it is
+  Full v2 baseline (concise prompt): `eval_results/financebench_20260731T025337Z.json`
+  — 150 q, full pipeline, **0 errors**: recall@5 **0.64**, recall@10 0.747, MRR
+  0.492, faithfulness **0.934**, cost **$0.0087**/q. Supersedes the verbose-prompt
+  run `...20260629T193049Z.json` (recall@5 identical at 0.64 → retrieval unchanged;
+  faithfulness 0.929→0.934, cost $0.0090→$0.0087). Cost/latency above are EVAL
+  numbers (top_k=10 + judge on); the **live API** runs top_k=5 + judge off
+  (faithfulness opt-in), so it is
   cheaper + faster — now **measured, not asserted**: 40 warm requests to the
   deployed `/query`, server p50 **2.06 s** / p95 **6.19 s**, cost **$0.0045**/query,
   streaming time-to-first-token **~1.0 s**; true cold start (Cloud Run scale-to-
@@ -81,9 +85,10 @@ read the code and scrutinize the numbers. Treat every output that way.
   .json`), with **faithfulness preserved (spot-check 0.90 → 0.9375)** and 0 answers
   losing citations. Streaming TTFT ~1.0 s already gives a fast *perceived*
   response. The residual p95 is content-legitimate length (a genuinely long list
-  answer) — not padding, so it's left as-is rather than truncated. Open: the full
-  150-q faithfulness/cost under the concise prompt isn't re-run yet (recall@k is
-  retrieval-only, so unaffected; spot-check validated). (2) **faithfulness is self-graded** (Haiku judges Haiku).
+  answer) — not padding, so it's left as-is rather than truncated. The full 150-q
+  eval under the concise prompt is now **done** (0 errors): recall@5 0.64 unchanged,
+  faithfulness 0.929→**0.934**, cost $0.0090→**$0.0087** —
+  `eval_results/financebench_20260731T025337Z.json`. (2) **faithfulness is self-graded** (Haiku judges Haiku).
   Now audited: a 20-q independent spot-check (Opus adjudicator) agrees with the
   judge **19/20 (95%)**, and the one miss is *harsh*, not lenient — so 0.929 is not
   inflated by a soft grader. But **correctness-vs-gold is still not directly
