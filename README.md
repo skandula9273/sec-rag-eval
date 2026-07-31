@@ -53,7 +53,7 @@ Live config: dense + **`text-embedding-3-large` @ 1536-d** (Matryoshka) +
 | recall@10 (fuzzy) | 0.54 | **0.74** | — |
 | tables@5 (fuzzy) | 0.32 | **0.70** | — |
 | faithfulness | 0.94 | **0.93** | 0.80 ✓ |
-| cost / query | $0.0063 | ~$0.005–0.009 | <$0.005 |
+| cost / query | $0.0063 | ~$0.010–0.017 (top_k=20) | <$0.005 |
 
 **Read recall@5 as a fuzzy hit rate, not strict recall.** fuzzy(0.5) counts a hit
 when ≥50% of a question's gold-evidence *tokens* appear anywhere in a retrieved
@@ -83,24 +83,28 @@ chunks) were measured and rejected. The full table and the reasoning are in
 ### Answer accuracy (is the final answer right, not just retrieved?)
 
 Recall says nothing about whether the *answer* matches FinanceBench's gold. Scored
-on all 150 (`make eval … --accuracy`; LLM judge = Haiku, recorded in the JSON;
-`eval_results/financebench_20260731T111452Z.json`, 0 errors):
+on all 150 at the live serving depth (**top_k=20**; `make eval … --accuracy`; LLM
+judge = Haiku, recorded in the JSON;
+`eval_results/financebench_20260731T115740Z.json`, 0 errors):
 
 | Metric | Value | Basis |
 |---|---|---|
-| LLM-graded accuracy (of attempted) | **0.76** | 71 / 94 answered |
-| LLM-graded accuracy (over all 150) | **0.47** | refusals counted as not-correct |
-| numeric-exact accuracy | **0.83** | 40 / 48 single-figure golds |
-| **refusal rate** | **0.37** | 56 / 150 |
+| LLM-graded accuracy (of attempted) | **0.74** | 75 / 102 answered |
+| LLM-graded accuracy (over all 150) | **0.50** | refusals counted as not-correct |
+| numeric-exact accuracy | **0.85** | 45 / 53 single-figure golds |
+| **refusal rate** | **0.32** | 48 / 150 |
 
 The two accuracy numbers differ by exactly the **refusal rate, reported separately
 on purpose**: the grounded prompt declines ("I cannot answer this from the provided
-sources") rather than guessing when the evidence isn't retrieved — so ~37% go
-unanswered, tracking the recall gap (recall@5 0.64). Right ~76% of what it attempts,
-but honest about the third it can't. Per-category numbers and the numeric-normalizer
-rules (currency/scale/sign/percent, `$1.2B = 1,200 million`) are in the JSON and
-[`src/sec_rag/eval/answer_accuracy.py`](src/sec_rag/eval/answer_accuracy.py). Note
-this measures accuracy as-is — retrieval was **not** tuned to raise it.
+sources") rather than guessing when the evidence isn't retrieved. That refusal rate
+is recall-bound, so it was the lever: raising retrieval depth 10→20 (recall@20
+0.833) put more evidence in context and moved **refusal 0.37→0.32** and **over-all
+accuracy 0.47→0.50** — a deliberate trade at **~2× the per-query cost** (double the
+in-context chunks; attempted-accuracy dips slightly as harder questions get
+attempted). Right ~74% of what it attempts, honest about the third it can't.
+Per-category numbers and the numeric-normalizer rules (currency/scale/sign/percent,
+`$1.2B = 1,200 million`) are in the JSON and
+[`src/sec_rag/eval/answer_accuracy.py`](src/sec_rag/eval/answer_accuracy.py).
 
 ## Architecture
 

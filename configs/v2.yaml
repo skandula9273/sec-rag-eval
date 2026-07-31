@@ -25,7 +25,12 @@ embedding:
 
 retrieval:
   method: dense             # hybrid + reranker retired (regressed); dense wins
-  top_k: 5
+  # 5 -> 20: recall climbs 0.64@5 -> 0.833@20 before plateauing (~0.85 ceiling), so
+  # more of the gold evidence lands in the generation context. Measured effect on the
+  # grounded answer (150 q, financebench_20260731T115740Z.json): refusal 0.373 -> 0.32,
+  # answer accuracy over-all 0.473 -> 0.50 — at ~2x the per-query cost (more input
+  # chunks). The frontend sends no top_k, so it inherits this default.
+  top_k: 20
   distance: cosine
 
 generation:
@@ -36,6 +41,6 @@ generation:
 
 eval:
   dataset: PatronusAI/financebench
-  recall_ks: [5, 10]
+  recall_ks: [5, 10, 20]   # 20 = the serving depth, so eval retrieves what prod does
   seed: 13
   faithfulness: true

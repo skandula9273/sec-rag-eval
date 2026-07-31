@@ -86,9 +86,14 @@ def run(
     retrieval_only: bool = False,
     score_accuracy: bool = False,
     accuracy_judge_model: str | None = None,
+    top_k: int | None = None,
 ) -> dict:
     ks = sorted(cfg.eval.recall_ks)
-    top_k = max(ks)
+    # Retrieval/generation depth. Defaults to the deepest recall_k; --top-k overrides
+    # it (and is added to the reported ks) so depth can be swept without a config edit.
+    depth = top_k or max(ks)
+    if top_k:
+        ks = sorted(set(ks) | {top_k})
     questions = _select(load_questions(cfg.eval.dataset), limit, cfg.eval.seed)
     # Accuracy needs the generated answer, so it forces the full pipeline; the judge
     # model is recorded in the output. Faithfulness is turned off on an accuracy run
@@ -120,12 +125,12 @@ def run(
     # The retrieval path is identical to full mode, so the recall is the same.
     def _evaluate(engine: QueryEngine, q: Question):
         if retrieval_only:
-            chunks, retr_ms = engine.retrieve(q.question, top_k=top_k)
+            chunks, retr_ms = engine.retrieve(q.question, top_k=depth)
             return [c.content for c in chunks], retr_ms, None, None, None
         # Accuracy folds its judge call into this retried unit, so a judge failure
         # retries with the rest of the question rather than crashing the run.
         wf = False if score_accuracy else None  # accuracy run: faithfulness judge off
-        res = engine.run(q.question, top_k=top_k, with_faithfulness=wf)
+        res = engine.run(q.question, top_k=depth, with_faithfulness=wf)
         m = res.response.metrics
         acc = None
         if score_accuracy:
@@ -260,6 +265,13 @@ def main() -> None:
         help="LLM correctness judge model (default: the generation model); "
         "recorded in the JSON",
     )
+    ap.add_argument(
+        "--top-k",
+        type=int,
+        default=None,
+        help="retrieval/generation depth (default: deepest recall_k); sweep it to "
+        "trade recall coverage against cost/latency",
+    )
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -271,6 +283,7 @@ def main() -> None:
         retrieval_only=args.no_generate,
         score_accuracy=args.accuracy,
         accuracy_judge_model=args.accuracy_judge_model,
+        top_k=args.top_k,
     )
 
     out_dir = Path(args.out_dir)
