@@ -515,6 +515,30 @@ to a committed JSON.
   instance of the "eval runner swallows infra failures" debt; the partial was
   discarded, not cited.)
 
+### Live-demo liveness audit — and the fix I *didn't* make
+- A stranger-with-no-keys audit of the deployed demo, before touching anything: both
+  advertised URLs were up (the Cloud Run web host + a stale GitHub Pages link the docs
+  still pointed at — consolidated to the one cache-proof Cloud Run host).
+  `SEC_RAG_REQUIRE_KEYS` is unset, so keyless visitors run on the owner's keys
+  (rate-limited), not a 401. Neon was awake; the real first-visit cost is a **~13 s
+  cold start** (Cloud Run scale-to-zero), which the README's "~15–25 s" never
+  mentioned — corrected to measured numbers (warm ~2 s corpus / ~6 s a fresh EDGAR
+  filing).
+- **The honest part — I flagged a defect that wasn't one.** The audit noted the live
+  cache averaged "~115 chunks/filing" and I inferred the live path indexed only a
+  *slice* of each 10-K. When asked to fix it, I measured first: it indexes the **full**
+  document — AAPL 10-K = 87 chunks, JPM 10-K = 331 chunks, both reaching Item 15/16 +
+  the signature page, with all sections and financial-statement tables intact. The
+  "~115" was a mean across mixed filing sizes (8-K/10-Q/10-K), not truncation. So I made
+  **no change to the indexer** — fixing a working path is churn, and rule #2 (honest
+  even when inconvenient) says report the wrong premise, not invent a diff.
+- **What I added instead — a coverage guardrail**, so a *real* future truncation can't
+  hide behind a plausible answer: `_coverage_check` flags a 10-K/10-Q whose extracted
+  text doesn't reach the SEC §13 signature attestation (the one end-of-document marker
+  stable across issuers — Item numbering varies), and `_index` logs coverage + WARNs on
+  a miss. Observability only (still indexes what it got); pure helper, unit-tested;
+  verified on live AAPL HTML (full → ok, a 5 % slice → warned).
+
 ### Net after this round
 - Every headline number now traces to a committed artifact. The three latency levers
   (pool, judge-off-path, concision) are shipped; live p50 meets <2.5 s and streaming
