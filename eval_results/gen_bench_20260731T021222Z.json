@@ -1,0 +1,431 @@
+{
+  "timestamp": "2026-07-31T02:12:22.012955+00:00",
+  "mode": "generation_prompt_ab",
+  "config_file": "configs/v2.yaml",
+  "n": 20,
+  "arms": {
+    "verbose": {
+      "tokens_out": {
+        "p50": 97.0,
+        "p95": 377.0,
+        "max": 504.0,
+        "mean": 143.7
+      },
+      "gen_ms": {
+        "p50": 1807.7,
+        "p95": 5855.2,
+        "max": 6020.5,
+        "mean": 2569.0
+      },
+      "mean_cost_usd": 0.004433
+    },
+    "concise": {
+      "tokens_out": {
+        "p50": 54.0,
+        "p95": 343.0,
+        "max": 441.0,
+        "mean": 108.0
+      },
+      "gen_ms": {
+        "p50": 1432.4,
+        "p95": 5250.5,
+        "max": 5578.1,
+        "mean": 2110.0
+      },
+      "mean_cost_usd": 0.004383
+    }
+  },
+  "delta": {
+    "tokens_out_mean_pct": -24.9,
+    "gen_ms_p50_pct": -20.8,
+    "gen_ms_p95_pct": -10.3,
+    "cost_mean_pct": -1.1
+  },
+  "quality_guard": {
+    "answers_that_lost_all_citations": 0,
+    "verbose_refusals": 0,
+    "concise_refusals": 0
+  },
+  "rows": [
+    {
+      "question": "What was Costco's total revenue in FY2021?",
+      "verbose": {
+        "gen_ms": 2797.6,
+        "tokens_out": 97,
+        "cost_usd": 0.0035470000000000002,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "According to Costco's Consolidated Statements of Income for the 52 weeks ended August 29, 2021, Costco's total revenue in FY2021 was **$195,929 million** (or ap"
+      },
+      "concise": {
+        "gen_ms": 940.9,
+        "tokens_out": 25,
+        "cost_usd": 0.003316,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Costco's total revenue in FY2021 was $195,929 million [1]."
+      }
+    },
+    {
+      "question": "What was Boeing's net property, plant and equipment at year end FY2018?",
+      "verbose": {
+        "gen_ms": 1964.4,
+        "tokens_out": 98,
+        "cost_usd": 0.003163,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "According to the SEC filing, Boeing's net property, plant and equipment at year end FY2018 was **$12,645 million** [1][2].  This figure is shown in Note 11 \u2013 Pr"
+      },
+      "concise": {
+        "gen_ms": 1729.3,
+        "tokens_out": 63,
+        "cost_usd": 0.003117,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "Boeing's net property, plant and equipment at year end FY2018 was $12,645 million [1][2].  This was calculated as gross property, plant and equipment of $31,213"
+      }
+    },
+    {
+      "question": "Did AMD report customer concentration in FY2022?",
+      "verbose": {
+        "gen_ms": 2044.8,
+        "tokens_out": 85,
+        "cost_usd": 0.005199,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Yes, AMD reported customer concentration in FY2022. According to the 2022 10-K filing, \"One customer accounted for 16% of our consolidated net revenue for the y"
+      },
+      "concise": {
+        "gen_ms": 1560.9,
+        "tokens_out": 71,
+        "cost_usd": 0.005258,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Yes, AMD reported customer concentration in FY2022. One customer accounted for 16% of AMD's consolidated net revenue for the year ended December 31, 2022, with "
+      }
+    },
+    {
+      "question": "What drove AMD's revenue change in FY2022?",
+      "verbose": {
+        "gen_ms": 4350.3,
+        "tokens_out": 318,
+        "cost_usd": 0.006459,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "# AMD's Revenue Change in FY2022  AMD's total net revenue increased from $16.434 billion in 2021 to $23.601 billion in 2022, representing a 44% increase [1]. Th"
+      },
+      "concise": {
+        "gen_ms": 4313.9,
+        "tokens_out": 313,
+        "cost_usd": 0.006563,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "AMD's FY2022 revenue change was driven by the following factors by segment:  **Data Center:** Revenue increased 64% to $6.0 billion, \"primarily driven by higher"
+      }
+    },
+    {
+      "question": "What was Nike's total current assets at the end of FY2019?",
+      "verbose": {
+        "gen_ms": 1121.6,
+        "tokens_out": 52,
+        "cost_usd": 0.0028910000000000003,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "According to Nike's FY2019 10-K filing, Nike's total current assets at the end of FY2019 (May 31, 2019) were **$16,525 million** [4]."
+      },
+      "concise": {
+        "gen_ms": 1295.7,
+        "tokens_out": 27,
+        "cost_usd": 0.002895,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Nike's total current assets at the end of FY2019 were $16,525 million [4]."
+      }
+    },
+    {
+      "question": "What was Amcor's net accounts receivable at year end FY2020?",
+      "verbose": {
+        "gen_ms": 1130.7,
+        "tokens_out": 53,
+        "cost_usd": 0.003804,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "According to Amcor's Consolidated Balance Sheet as of June 30, 2020, the net accounts receivable (reported as \"Trade receivables, net\") was **$1,615.9 million**"
+      },
+      "concise": {
+        "gen_ms": 1256.7,
+        "tokens_out": 14,
+        "cost_usd": 0.003738,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "$1,615.9 million [1]"
+      }
+    },
+    {
+      "question": "Does 3M maintain a stable dividend distribution trend?",
+      "verbose": {
+        "gen_ms": 4380.5,
+        "tokens_out": 258,
+        "cost_usd": 0.005178,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "# 3M's Dividend Distribution Trend  Yes, 3M maintains a stable dividend distribution trend with consistent increases. According to the SEC filing:  **Dividend P"
+      },
+      "concise": {
+        "gen_ms": 2052.5,
+        "tokens_out": 124,
+        "cost_usd": 0.004637,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "Yes, 3M maintains a stable dividend distribution trend. The company paid cash dividends of $4.44 per share in 2016, $4.70 per share in 2017, and $5.44 per share"
+      }
+    },
+    {
+      "question": "What was Block's total net revenue in FY2020?",
+      "verbose": {
+        "gen_ms": 1807.7,
+        "tokens_out": 101,
+        "cost_usd": 0.003354,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Block's total net revenue in FY2020 was $9,497,578 thousand (or approximately $9.5 billion) [2].  This total comprised: - Transaction-based revenue: $3,294,978 "
+      },
+      "concise": {
+        "gen_ms": 1924.1,
+        "tokens_out": 109,
+        "cost_usd": 0.0035229999999999997,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Block's total net revenue in FY2020 was $9,497,578 thousand (or approximately $9.5 billion) [2].  This comprised: - Transaction-based revenue: $3,294,978 thousa"
+      }
+    },
+    {
+      "question": "What was Coca-Cola's net income in FY2017?",
+      "verbose": {
+        "gen_ms": 1427.0,
+        "tokens_out": 81,
+        "cost_usd": 0.003764,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "According to Coca-Cola's 2017 10-K filing, the company's net income attributable to shareowners for FY2017 was **$1,248 million** [1].  This figure represents t"
+      },
+      "concise": {
+        "gen_ms": 1931.2,
+        "tokens_out": 54,
+        "cost_usd": 0.0037579999999999996,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Coca-Cola's net income attributable to shareowners in FY2017 was $1,248 million [1].  (Note: If referring to consolidated net income, it was $1,283 million [1]."
+      }
+    },
+    {
+      "question": "What are AMD's major products and services as of FY2022?",
+      "verbose": {
+        "gen_ms": 6020.5,
+        "tokens_out": 504,
+        "cost_usd": 0.008114,
+        "n_citations": 3,
+        "looks_like_refusal": false,
+        "preview": "# AMD's Major Products and Services as of FY2022  AMD's major products and services as of FY2022 are organized across four reportable segments:  ## Data Center "
+      },
+      "concise": {
+        "gen_ms": 5578.1,
+        "tokens_out": 441,
+        "cost_usd": 0.007928000000000001,
+        "n_citations": 3,
+        "looks_like_refusal": false,
+        "preview": "AMD's major products and services as of FY2022 are organized across four reportable segments [2]:  **Data Center Segment** Server CPUs, GPUs, DPUs, FPGAs, and A"
+      }
+    },
+    {
+      "question": "What was Microsoft's total revenue in FY2016?",
+      "verbose": {
+        "gen_ms": 1421.6,
+        "tokens_out": 34,
+        "cost_usd": 0.005,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "Microsoft's total revenue in FY2016 was $85,320 million (or $85.32 billion) [1][2]."
+      },
+      "concise": {
+        "gen_ms": 1053.8,
+        "tokens_out": 25,
+        "cost_usd": 0.005084,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "Microsoft's total revenue in FY2016 was $85,320 million [1][2]."
+      }
+    },
+    {
+      "question": "What drove 3M's operating margin change in FY2022?",
+      "verbose": {
+        "gen_ms": 5855.2,
+        "tokens_out": 377,
+        "cost_usd": 0.007118,
+        "n_citations": 3,
+        "looks_like_refusal": false,
+        "preview": "# 3M's Operating Margin Change in FY2022  3M's operating margin declined from 20.8% in 2021 to 19.1% in 2022, a decrease of 1.7 percentage points [3]. The key d"
+      },
+      "concise": {
+        "gen_ms": 5250.5,
+        "tokens_out": 343,
+        "cost_usd": 0.007077,
+        "n_citations": 3,
+        "looks_like_refusal": false,
+        "preview": "3M's operating margin declined 1.7 percentage points in FY2022 (from 20.8% to 19.1%), driven by the following factors [3]:  **Raw material impact:** Raw materia"
+      }
+    },
+    {
+      "question": "What was CVS Health's total revenue in FY2018?",
+      "verbose": {
+        "gen_ms": 1369.6,
+        "tokens_out": 37,
+        "cost_usd": 0.0033289999999999995,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "CVS Health's total revenue in FY2018 was $194,579 million (or approximately $194.6 billion) [1][2]."
+      },
+      "concise": {
+        "gen_ms": 1396.6,
+        "tokens_out": 27,
+        "cost_usd": 0.003408,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "CVS Health's total revenue in FY2018 was $194,579 million [1][2]."
+      }
+    },
+    {
+      "question": "What was Corning's effective tax rate in FY2020?",
+      "verbose": {
+        "gen_ms": 1209.4,
+        "tokens_out": 32,
+        "cost_usd": 0.0032779999999999997,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "According to the sources, Corning's effective tax rate in FY2020 was 17.8% [2][4]."
+      },
+      "concise": {
+        "gen_ms": 953.4,
+        "tokens_out": 25,
+        "cost_usd": 0.003372,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Corning's effective tax rate in FY2020 was 17.8% [4]."
+      }
+    },
+    {
+      "question": "What was American Water Works' total current liabilities in FY2022?",
+      "verbose": {
+        "gen_ms": 1412.8,
+        "tokens_out": 132,
+        "cost_usd": 0.0029909999999999997,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "According to the 2022 10-K filing, American Water Works' total current liabilities in FY2022 were **$2,811 million** [3].  This total comprised: - Short-term de"
+      },
+      "concise": {
+        "gen_ms": 937.8,
+        "tokens_out": 27,
+        "cost_usd": 0.002595,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "American Water Works' total current liabilities in FY2022 were $2,811 million [3]."
+      }
+    },
+    {
+      "question": "How did Boeing's effective tax rate in FY2022 compare to FY2021?",
+      "verbose": {
+        "gen_ms": 2198.1,
+        "tokens_out": 131,
+        "cost_usd": 0.003648,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Based on the sources provided, Boeing's effective tax rate in FY2022 compared to FY2021 was as follows:  - **FY2022**: -0.6% (a tax benefit) [2] - **FY2021**: 1"
+      },
+      "concise": {
+        "gen_ms": 1170.3,
+        "tokens_out": 55,
+        "cost_usd": 0.003397,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Boeing's effective tax rate was (0.6)% in FY2022 compared to 14.7% in FY2021 [2]. This represents a decrease of 15.3 percentage points year-over-year."
+      }
+    },
+    {
+      "question": "What was Costco's total assets at the end of FY2021?",
+      "verbose": {
+        "gen_ms": 1503.7,
+        "tokens_out": 50,
+        "cost_usd": 0.0036819999999999995,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "According to Costco's Consolidated Balance Sheet as of August 29, 2021, Costco's total assets at the end of FY2021 were **$59,268 million** [1]."
+      },
+      "concise": {
+        "gen_ms": 1432.4,
+        "tokens_out": 37,
+        "cost_usd": 0.0037459999999999998,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Costco's total assets at the end of FY2021 (August 29, 2021) were $59,268 million [1]."
+      }
+    },
+    {
+      "question": "What were Best Buy's domestic segment store counts in FY2023?",
+      "verbose": {
+        "gen_ms": 2913.7,
+        "tokens_out": 108,
+        "cost_usd": 0.003709,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "Based on the SEC filing, Best Buy's domestic segment store counts in FY2023 were as follows [1][2]:  **Total Domestic segment stores: 978** [1]  This total cons"
+      },
+      "concise": {
+        "gen_ms": 1749.5,
+        "tokens_out": 63,
+        "cost_usd": 0.003613,
+        "n_citations": 2,
+        "looks_like_refusal": false,
+        "preview": "Best Buy's domestic segment store count in FY2023 was 978 stores [1]. This total comprised 925 Best Buy stores, 19 Outlet Centers, 20 Pacific Sales stores, and "
+      }
+    },
+    {
+      "question": "How does Amazon describe its working capital management?",
+      "verbose": {
+        "gen_ms": 5345.1,
+        "tokens_out": 283,
+        "cost_usd": 0.005690000000000001,
+        "n_citations": 4,
+        "looks_like_refusal": false,
+        "preview": "# Amazon's Working Capital Management  Amazon describes its working capital management as centered on efficiently managing the components of working capital to "
+      },
+      "concise": {
+        "gen_ms": 4598.0,
+        "tokens_out": 289,
+        "cost_usd": 0.005849,
+        "n_citations": 4,
+        "looks_like_refusal": false,
+        "preview": "Amazon describes its working capital management as follows:  **Core Operating Model:** \"Because of our model we are able to turn our inventory quickly and have "
+      }
+    },
+    {
+      "question": "What was Coca-Cola's total current assets in FY2017?",
+      "verbose": {
+        "gen_ms": 1105.1,
+        "tokens_out": 43,
+        "cost_usd": 0.004736,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "According to Coca-Cola's 2017 10-K filing, the company's total current assets in FY2017 were **$36,545 million** [1]."
+      },
+      "concise": {
+        "gen_ms": 1074.4,
+        "tokens_out": 27,
+        "cost_usd": 0.004784999999999999,
+        "n_citations": 1,
+        "looks_like_refusal": false,
+        "preview": "Coca-Cola's total current assets in FY2017 were $36,545 million [1]."
+      }
+    }
+  ]
+}

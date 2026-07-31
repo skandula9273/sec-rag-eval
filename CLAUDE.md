@@ -74,12 +74,16 @@ read the code and scrutinize the numbers. Treat every output that way.
 
 - **Remaining gaps:** (1) **latency** — measured on the live API (server p50
   **2.06 s**, p95 **6.19 s**; artifact `eval_results/api_latency_20260731T004411Z
-  .json`). The **p50 meets** the <2.5 s target; the **p95 (6.2 s) does not**. The
-  plumbing levers are now **done**: connection pool shipped (concurrent retrieval
-  4.9× — see debt section), and the faithfulness judge is confirmed off the
-  request path. What remains is purely the **generation tail** (a long multi-claim
-  answer is the p95), which needs output-length/model work, not infra. Streaming
-  TTFT ~1.0 s already gives a fast *perceived* response. (2) **faithfulness is self-graded** (Haiku judges Haiku).
+  .json`). Three levers now shipped: the connection pool (concurrent retrieval
+  4.9× — see debt section), the judge confirmed off the request path, and a
+  **concision answer prompt** targeting the generation tail — output tokens
+  **−25%**, p50 generation **−~20%** (A/B `eval_results/gen_bench_20260731T021222Z
+  .json`), with **faithfulness preserved (spot-check 0.90 → 0.9375)** and 0 answers
+  losing citations. Streaming TTFT ~1.0 s already gives a fast *perceived*
+  response. The residual p95 is content-legitimate length (a genuinely long list
+  answer) — not padding, so it's left as-is rather than truncated. Open: the full
+  150-q faithfulness/cost under the concise prompt isn't re-run yet (recall@k is
+  retrieval-only, so unaffected; spot-check validated). (2) **faithfulness is self-graded** (Haiku judges Haiku).
   Now audited: a 20-q independent spot-check (Opus adjudicator) agrees with the
   judge **19/20 (95%)**, and the one miss is *harsh*, not lenient — so 0.929 is not
   inflated by a soft grader. But **correctness-vs-gold is still not directly
