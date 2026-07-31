@@ -1,0 +1,20 @@
+# Evidence matchers for recall scoring. Parameters live HERE, not in code, so the
+# thresholds are auditable and the study is reproducible. These are NOT tuned to a
+# "best" matcher — the point of the study is to measure how much the headline recall
+# depends on the matcher, before anyone picks one (that needs human agreement first).
+matchers:
+  strict:
+    type: strict            # normalized gold span is an exact substring of the chunk
+
+  overlap:
+    type: overlap
+    threshold: 0.5          # the original fuzzy(0.5) metric — DO NOT change (keeps
+                            # every committed fuzzy number reproducible)
+
+  semantic:
+    type: semantic
+    threshold: 0.62         # stated, not tuned: max cosine(chunk sentence, gold span)
+    embedding:              # a cheap model for span similarity (independent of the
+      provider: openai      # retrieval embedder, so the matcher isn't circular)
+      model: text-embedding-3-small
+      dim: 1536

@@ -1,0 +1,93 @@
+{
+  "timestamp": "2026-07-31T12:29:30.575609+00:00",
+  "mode": "matcher_study_baseline",
+  "config_file": "configs/v2.yaml",
+  "embedding_model": "text-embedding-3-large",
+  "chunk_tokens": 1024,
+  "n_questions": 150,
+  "top_k_retrieved": 10,
+  "matcher_specs": {
+    "strict": {
+      "type": "strict"
+    },
+    "overlap": {
+      "type": "overlap",
+      "threshold": 0.5
+    },
+    "semantic": {
+      "type": "semantic",
+      "threshold": 0.62,
+      "embedding": {
+        "provider": "openai",
+        "model": "text-embedding-3-small",
+        "dim": 1536
+      }
+    }
+  },
+  "note": "recall under each matcher over the SAME retrieval. strict = exact substring; overlap = fuzzy(0.5); semantic = cosine>=threshold over spans.",
+  "by_matcher": {
+    "strict": {
+      "recall_at_k": {
+        "recall@5": 0.0933,
+        "recall@10": 0.1267
+      },
+      "mrr": 0.0604,
+      "per_category_recall": {
+        "domain-relevant": {
+          "recall@5": 0.12,
+          "recall@10": 0.2
+        },
+        "metrics-generated": {
+          "recall@5": 0.04,
+          "recall@10": 0.04
+        },
+        "novel-generated": {
+          "recall@5": 0.12,
+          "recall@10": 0.14
+        }
+      }
+    },
+    "overlap": {
+      "recall_at_k": {
+        "recall@5": 0.64,
+        "recall@10": 0.7467
+      },
+      "mrr": 0.4923,
+      "per_category_recall": {
+        "domain-relevant": {
+          "recall@5": 0.56,
+          "recall@10": 0.66
+        },
+        "metrics-generated": {
+          "recall@5": 0.7,
+          "recall@10": 0.78
+        },
+        "novel-generated": {
+          "recall@5": 0.66,
+          "recall@10": 0.8
+        }
+      }
+    },
+    "semantic": {
+      "recall_at_k": {
+        "recall@5": 0.8067,
+        "recall@10": 0.8733
+      },
+      "mrr": 0.6106,
+      "per_category_recall": {
+        "domain-relevant": {
+          "recall@5": 0.82,
+          "recall@10": 0.9
+        },
+        "metrics-generated": {
+          "recall@5": 0.82,
+          "recall@10": 0.9
+        },
+        "novel-generated": {
+          "recall@5": 0.78,
+          "recall@10": 0.82
+        }
+      }
+    }
+  }
+}
