@@ -61,8 +61,17 @@ a crash. (Fix: classify infra errors as fatal, or suppress aggregates when
   tables(0.32)/prose(0.66) gap that *is* the finding. "I understand where my
   system fails" beats "here's my average."
 - **Fuzzy primary + substring lower bound** (see above), **fixed seed (13)**,
-  **temp 0**, **pinned lockfile**, **timestamped JSON committed per run** — one
-  command reproduces the headline numbers from a clean clone.
+  **temp 0**, **pinned lockfile**, **timestamped JSON committed per run** — so every
+  past headline traces to the exact config that produced it and the harness is
+  deterministic. **Honest reproducibility scope** (measured on a pristine `git
+  archive` of HEAD — 139 tracked files, no `.env`, no `data/`, no committed
+  embeddings): the **offline test suite reproduces from a clean clone** (115 tests,
+  no network/keys/DB), but the **headline recall numbers do NOT** — the FinanceBench
+  PDFs are CC-BY-NC and gitignored, and the 274 MB embedded corpus lives in Neon, not
+  the repo, so re-running the benchmark needs API keys + a populated DB, not just
+  `git clone`. The README's "Reproducibility" section spells out the three tiers.
+  (Earlier this line claimed "one command reproduces the headline numbers from a clean
+  clone" — corrected: that was false, and a rule-#2 overclaim.)
 - **Pre-registered success criteria**: e.g. V1.1 hybrid must lift recall@5 vs 0.44
   *and* the tables category vs 0.32 *specifically* — so a lift "from somewhere
   else" can't be spun as confirming the diagnosis.

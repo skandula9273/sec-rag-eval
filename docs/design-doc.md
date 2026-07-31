@@ -220,7 +220,11 @@ Screenshots from this dashboard go in the technical writeup, not the user demo.
 - Fixed random seeds for any sampling step.
 - Eval results committed to repo as JSON, timestamped per run.
 - Architecture diagram committed as SVG alongside this doc.
-- One-command rerun: `make eval` reproduces the headline numbers from any clean clone.
+- ~~One-command rerun: `make eval` reproduces the headline numbers from any clean
+  clone.~~ **Corrected 2026-07-31 (see Amendments) — this was false.** The FinanceBench
+  PDFs (CC-BY-NC, gitignored) and the 274 MB embedded corpus (Neon-only) are not in the
+  repo, so a clean clone reproduces the **offline test suite** (115 tests), not the
+  headline recall — which needs API keys + a populated DB.
 
 ## Open decisions
 
@@ -475,4 +479,20 @@ code is the EDGAR client + the on-demand engine. Build in increments:
 
 ---
 
-*Living document. Versioned in repo. Updates noted at top with date and rationale.*
+### 2026-07-31 — Correction: reproducibility claim overstated (not a scope change)
+
+The "Reproducibility commitments" section claimed *"one-command rerun: `make eval`
+reproduces the headline numbers from any clean clone."* **That is false**, and
+reporting it as true violated rule #2 (honest numbers). Measured on a pristine `git
+archive` of HEAD (139 tracked files): a clean clone has **no `.env`, no `data/` PDFs,
+and no committed embeddings**. The FinanceBench PDFs are **CC-BY-NC-4.0 and gitignored**
+(not redistributable; `make data` only points at the official downloader), and the
+**274 MB v2 corpus lives in Neon, not the repo**. So `make eval` cannot run from a bare
+clone.
+
+**What actually reproduces, now stated precisely** (README → "Reproducibility"): a
+clean clone reproduces the **offline test suite** (115 tests, no network/keys/DB, one
+command) — the real one-command guarantee — while the **headline recall requires API
+keys + a populated corpus**, and end-to-end ingest additionally requires the
+maintainer to supply the non-redistributable PDFs. No code or scope changed; this
+amendment records the corrected claim and its supersession of the line above.

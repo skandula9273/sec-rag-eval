@@ -178,6 +178,30 @@ Run the API + frontend locally: `SEC_RAG_CONFIG=configs/v2.yaml uvicorn
 sec_rag.api.app:app --port 8000`, then serve `web/` (`python -m http.server 8080`
 in `web/`) — it auto-points at the local API. Cloud Run deploy: [`DEPLOY.md`](DEPLOY.md).
 
+### Reproducibility — what a fresh clone can and cannot rerun
+
+Honest scope, measured on a pristine `git archive` of `HEAD` (**139 tracked files, no
+`.env`, no `data/`, no committed embeddings**):
+
+- **Reproduces from a clean clone, offline, no secrets** — the **test suite**. After
+  `pip install -e ".[dev]"`, `make test` runs all **115 tests** with no network, no API
+  keys, and no database (pure logic: chunking, metrics, the matchers, pricing, API
+  schemas, auth, the eval fail-fast classifier). *This* is the one-command guarantee.
+- **Reproduces only with keys + the maintainer's populated corpus** — the **eval
+  numbers**. `make eval` embeds each query (OpenAI) and retrieves against the **274 MB
+  v2 corpus that lives in Neon, not the repo**. With `DATABASE_URL` + `OPENAI_API_KEY`
+  pointed at that DB you can rerun retrieval recall (full-pipeline faithfulness/cost
+  also needs `ANTHROPIC_API_KEY`). The committed **`eval_results/*.json`** are the
+  frozen record of every past run (seed 13, temp 0, pinned lockfile) — auditable, but a
+  *record*, not something a fresh clone recomputes.
+- **Cannot be reproduced from scratch by a third party** — the end-to-end
+  ingest→embed→eval pipeline. The **FinanceBench PDFs are CC-BY-NC-4.0 and gitignored**
+  (not redistributable); `make data` points at the official downloader, it does not
+  auto-fetch. So `make ingest` needs you to supply the PDFs and a DB of your own.
+
+In short: **`make test` is genuinely `git clone` + one command; the headline recall is
+not** — it needs data and a database the repo (correctly) does not ship.
+
 ## eval-as-CI
 
 Every PR runs a **retrieval-only smoke eval** ([`.github/workflows/eval-ci.yml`](.github/workflows/eval-ci.yml)):
