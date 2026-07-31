@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -29,6 +30,7 @@ import numpy as np
 from sec_rag.config import EmbeddingConfig, Secrets, load_config
 from sec_rag.eval.answer_accuracy import score_answer
 from sec_rag.eval.confound_grid import MODELS, _normalize, cell_corpus
+from sec_rag.eval.errors import fatal_reason
 from sec_rag.eval.run_financebench import _accuracy_block
 from sec_rag.generate.answer import generate_answer
 from sec_rag.ingest.chunk import tiktoken_encoder
@@ -56,6 +58,7 @@ def run_arm(arm: str, judge_model: str | None, sleep_s: float) -> dict:
     sims = V @ Q.T
 
     scores, by_cat, errors = [], defaultdict(list), []
+    aborted: dict | None = None
     for j, q in enumerate(questions):
         col = sims[:, j]
         idx = np.argpartition(-col, TOP_K)[:TOP_K]
@@ -70,7 +73,15 @@ def run_arm(arm: str, judge_model: str | None, sleep_s: float) -> dict:
         try:
             gen = generate_answer(q.question, chunks, cfg.generation, secrets)
             sc = score_answer(q.question, q.answer, gen.text, judge_model=judge, secrets=secrets)
-        except Exception as e:  # noqa: BLE001 — record + skip, don't sink the arm
+        except Exception as e:  # noqa: BLE001
+            # A credit-out / quota-out here would fail every remaining question the
+            # same way (this arm died at 66/150 exactly this way). Abort rather than
+            # emit an accuracy block over the prefix that ran — same rule as the main
+            # runner (sec_rag/eval/errors.py). Transient errors are recorded + skipped.
+            reason = fatal_reason(e)
+            if reason:
+                aborted = {"id": q.id, "reason": reason, "error": f"{type(e).__name__}: {e}"}
+                break
             errors.append({"id": q.id, "error": f"{type(e).__name__}: {e}"})
             continue
         scores.append(sc)
@@ -78,12 +89,16 @@ def run_arm(arm: str, judge_model: str | None, sleep_s: float) -> dict:
         if sleep_s:
             time.sleep(sleep_s)
 
+    complete = aborted is None and not errors and len(scores) == len(questions)
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "mode": "confound_accuracy_arm",
+        "complete": complete,          # False -> partial arm, DO NOT CITE
+        "aborted": aborted,            # None, or {id, reason, error} if fatal
         "arm": arm,
         "top_k": TOP_K,
         "judge_model": judge,
+        "n_questions": len(questions),
         "n_scored": len(scores),
         "n_errors": len(errors),
         "errors": errors,
@@ -108,9 +123,22 @@ def main() -> None:
     p.write_text(json.dumps(report, indent=2))
     o = report["overall"]
     print(f"Wrote {p}")
-    print(f"  arm={args.arm} scored={report['n_scored']} errors={report['n_errors']}")
+    print(f"  arm={args.arm} scored={report['n_scored']}/{report['n_questions']} "
+          f"errors={report['n_errors']}")
     print(f"  LLM acc over-all={o['llm']['accuracy_over_all']} (attempted {o['llm']['accuracy']}) "
           f"refusal={o['refusal_rate']} numeric={o['numeric']['accuracy']}")
+
+    if not report["complete"]:
+        ab = report.get("aborted")
+        print("\n" + "=" * 72, file=sys.stderr)
+        print("⚠️  INCOMPLETE ARM — DO NOT CITE THIS ARTIFACT AS A RESULT", file=sys.stderr)
+        if ab:
+            print(f"   aborted early: {ab['reason']}", file=sys.stderr)
+            print(f"   first fatal error (q={ab['id']}): {ab['error']}", file=sys.stderr)
+        print(f"   scored {report['n_scored']}/{report['n_questions']} -> "
+              "accuracy above is PARTIAL.", file=sys.stderr)
+        print("=" * 72, file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

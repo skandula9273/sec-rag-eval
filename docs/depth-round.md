@@ -575,11 +575,40 @@ to a committed JSON.
   the right stopping point. (One caveat: the V2 accuracy cell reuses the S2 Neon run — the
   local V2 accuracy arm hit an Anthropic credit-out at 66/150; same corpus/top_k/prompt.)
 
+### Eval runner fail-fast — a partial run can no longer look like a result
+- **The debt (it bit twice this round):** the per-question retry meant to survive a
+  transient blip also swallowed *account-level* outages. The concise-prompt full run
+  died on Anthropic credit depletion (110 "errors"); the confound accuracy arm at
+  66/150. In both, every remaining question failed the same way, yet the runner still
+  emitted an aggregate over the prefix that ran before the outage — a partial that
+  reads exactly like a real benchmark number (a rule #2 landmine).
+- **The distinction that makes it non-trivial:** the fatal signal is NOT a clean
+  status code. Anthropic credit-out is a **400** ("Your credit balance is too low…"),
+  not a 401/402 — so it must be caught by the *message*, not the status. OpenAI
+  quota-out is a **429** that is byte-for-byte a transient rate limit except for an
+  `insufficient_quota` marker — so a plain 429 must stay *retryable* while a quota 429
+  is fatal. A naive status-code check gets both wrong.
+- **Fix:** `eval/errors.py:fatal_reason(exc)` — a pure, version-robust classifier
+  (keys off the `status_code` attribute + real observed message markers, walks the
+  `__cause__`/`__context__` chain, no SDK-class imports). The runner aborts the
+  instant it fires; the report carries `complete: false` + `aborted: {id, reason,
+  error}`; `main()` exits non-zero with a "DO NOT CITE" banner so `make eval`/CI fail
+  loudly. Same fix in `confound_accuracy.py`. Transient errors keep the bounded retry.
+- **Honest scope:** this is a *guardrail*, not a new number — it changes how a broken
+  run reports, not any committed metric. Signatures are the real ones (copied from the
+  committed error strings in `eval_results/*.json`), not guessed. Verified: 11 tests
+  (`tests/test_eval_errors.py`) — classifier cases + a monkeypatched abort that proves
+  the loop short-circuits (never reaches the question after the fatal one) and marks
+  the run incomplete; plus a live retrieval-only smoke confirming a *clean* run still
+  stamps `complete: true` and exits 0. It also makes `ingest/embed.py`'s "same rule as
+  the eval runner" comment true — the runner now actually enforces it.
+
 ### Net after this round
 - Every headline number now traces to a committed artifact. The three latency levers
   (pool, judge-off-path, concision) are shipped; live p50 meets <2.5 s and streaming
   TTFT ~1 s covers perceived latency; the residual p95 is content-legitimate answer
-  length, not padding. What's left is honest and small: correctness-vs-gold isn't
+  length, not padding. The eval harness can no longer pass off a partial as a result
+  (fail-fast above). What's left is honest and small: correctness-vs-gold isn't
   directly scored (faithfulness ≠ accuracy), and the faithfulness judge should emit
   per-claim verdicts so its ~5% error rate is auditable.
 

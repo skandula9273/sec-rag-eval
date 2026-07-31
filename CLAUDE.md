@@ -244,11 +244,20 @@ Match that shape without being asked.
   passes `with_faithfulness=False`, `/query/stream` never judges; commit
   `e7491dd`). What's left is the **generation tail** — a long multi-claim answer
   is the p95, not infra — which needs output-length/model work, not plumbing.
-- **Eval runner swallows infra failures.** The per-question resilience (commit
-  `3b3880b`) let a billing outage masquerade as 77 question failures while still
-  emitting aggregate recall. Harden it to treat billing/auth errors as fatal (or
-  suppress aggregate metrics when `n_scored << n_questions`) so a partial run
-  never looks like a result.
+- ~~**Eval runner swallows infra failures.**~~ **FIXED** — the per-question
+  resilience (commit `3b3880b`) let a billing outage masquerade as N question
+  failures while still emitting aggregate recall over the lucky prefix. The runner
+  now classifies each failure (`eval/errors.py:fatal_reason`): an account-level
+  error — Anthropic credit-out (a **400** "credit balance" message, so caught by the
+  message not the status), OpenAI `insufficient_quota` (a **429**, distinguished from
+  a transient rate limit only by the marker), a 401/403 bad key — is unrecoverable,
+  so the run **aborts at once** instead of grinding into the same wall. The report
+  carries `complete: false` + `aborted: {id, reason, error}`, and `main()` exits
+  non-zero with a "DO NOT CITE" banner, so `make eval`/CI fail loudly on a partial.
+  Same fix in `confound_accuracy.py` (the arm that died at 66/150). Transient errors
+  (dropped socket, one-off timeout, a *plain* 429) still get the bounded retry. This
+  is the rule `ingest/embed.py` already fail-fasts on ("same rule as the eval
+  runner") — now actually true of the runner. Tests: `tests/test_eval_errors.py`.
 - Retrieval score is `1 - cosine_distance` (theoretically [-1,1]); clamp-for-
   display is optional. Lockfile pins the project itself, so re-run `pip install
   -e .` after `pip install -r requirements.lock`.

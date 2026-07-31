@@ -16,6 +16,7 @@ import argparse
 import json
 import math
 import random
+import sys
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -23,6 +24,7 @@ from pathlib import Path
 
 from sec_rag.config import Config, load_config
 from sec_rag.eval.answer_accuracy import AnswerScore, score_answer
+from sec_rag.eval.errors import fatal_reason
 from sec_rag.eval.metrics import evidence_match_rank, hit_rate_at_k, mean_reciprocal_rank
 from sec_rag.generate.answer import PRICING
 from sec_rag.ingest.financebench import Question, load_questions
@@ -110,14 +112,21 @@ def run(
     acc_scores: list[AnswerScore] = []                          # accuracy: overall
     acc_by_cat: dict[str, list[AnswerScore]] = defaultdict(list)  # accuracy: per category
     misses_no_evidence = 0
-    errors: list[dict] = []  # questions that failed even after a retry
+    errors: list[dict] = []  # questions that failed twice on a *transient* error
+    aborted: dict | None = None  # set iff a FATAL error stopped the run early
 
-    # One failing question (a transient Neon drop, an Anthropic timeout, a rate
-    # limit) must not throw away a 150-question run that is otherwise complete.
-    # Each question gets a bounded retry on a FRESH engine — a dead pooled
-    # connection is the failure we already hit during ingest, and a new engine
-    # reconnects — and anything still failing is recorded and skipped, not fatal.
-    # Failures are counted and disclosed in the report (rule 2: honest numbers).
+    # A *transient* failure on one question (a dropped Neon socket, a one-off
+    # Anthropic timeout, a momentary rate limit) must not throw away a 150-question
+    # run that is otherwise complete: each question gets a bounded retry on a FRESH
+    # engine — a dead pooled connection is the failure we already hit during ingest,
+    # and a new engine reconnects — and anything still failing is recorded + skipped.
+    # But an *account-level* failure (Anthropic credit-out, OpenAI quota-out, a bad
+    # key) is NOT transient — every remaining question would fail identically. We do
+    # NOT grind through it emitting an aggregate over the lucky prefix (that partial
+    # would look like a real result — the bug this guards against, CLAUDE.md rule 2
+    # + the "eval runner swallows infra failures" debt). fatal_reason() detects it and
+    # we abort at once, marking the report incomplete. Failures are counted and
+    # disclosed either way (rule 2: honest numbers).
     # Normalise one question to (contents, latency_ms, cost, faithfulness).
     # retrieval_only stops after retrieval (no Anthropic call): recall@k / MRR are
     # pure retrieval metrics, so they need only the query embedding + the DB. cost
@@ -150,8 +159,15 @@ def run(
                 time.sleep(sleep_s)
             try:
                 contents, latency, cost, faith, acc = _evaluate(engine, q)
-            except Exception:
-                # Rebuild the engine (new DB connection) and try once more.
+            except Exception as first_exc:
+                # An account/billing/auth error is unrecoverable — abort now rather
+                # than retry into the same wall and grind out a misleading partial.
+                reason = fatal_reason(first_exc)
+                if reason:
+                    aborted = {"id": q.id, "reason": reason,
+                               "error": f"{type(first_exc).__name__}: {first_exc}"}
+                    break
+                # Transient: rebuild the engine (new DB connection) and try once more.
                 try:
                     engine.close()
                 except Exception:
@@ -160,6 +176,11 @@ def run(
                     engine = QueryEngine(cfg)
                     contents, latency, cost, faith, acc = _evaluate(engine, q)
                 except Exception as second_exc:
+                    reason = fatal_reason(second_exc)
+                    if reason:  # the retry surfaced (or hit) a fatal error -> abort
+                        aborted = {"id": q.id, "reason": reason,
+                                   "error": f"{type(second_exc).__name__}: {second_exc}"}
+                        break
                     errors.append({"id": q.id, "error": f"{type(second_exc).__name__}: {second_exc}"})
                     continue
             if not q.evidence_texts:
@@ -179,8 +200,16 @@ def run(
     finally:
         engine.close()
 
+    # A run is citable only if EVERY attempted question produced a result: no fatal
+    # abort, no per-question errors, ranks for all of them. Anything less is a partial
+    # and its aggregates are over a biased sample — the `complete` flag + a non-zero
+    # exit in main() make that impossible to cite by accident (CLAUDE.md: "don't cite
+    # an eval JSON whose n_scored < n_questions or n_errors > 0").
+    complete = aborted is None and not errors and len(ranks) == len(questions)
     report = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "complete": complete,                # False -> partial run, DO NOT CITE
+        "aborted": aborted,                  # None, or {id, reason, error} if fatal
         "n_questions": len(questions),       # questions attempted
         "n_scored": len(ranks),              # questions that produced a result
         "match_mode": match_mode,
@@ -311,6 +340,24 @@ def main() -> None:
         print(f"    LLM     = {L['accuracy']}  ({L['n_correct']}/{o['n_answered']} answered)")
         print(f"    numeric = {N['accuracy']}  ({N['n_correct']}/{N['n_applicable']} figure-golds)")
         print(f"    refusal = {o['refusal_rate']}  ({o['n_refused']}/{o['n']})")
+
+    # A partial run must never be mistaken for a result: shout, and exit non-zero so
+    # `make eval`/CI fail loudly instead of a biased aggregate slipping through.
+    if not report["complete"]:
+        ab = report.get("aborted")
+        print("\n" + "=" * 72, file=sys.stderr)
+        print("⚠️  INCOMPLETE RUN — DO NOT CITE THIS ARTIFACT AS A RESULT", file=sys.stderr)
+        if ab:
+            print(f"   aborted early: {ab['reason']}", file=sys.stderr)
+            print(f"   first fatal error (q={ab['id']}): {ab['error']}", file=sys.stderr)
+        print(
+            f"   n_scored={report['n_scored']}/{report['n_questions']}  "
+            f"n_errors={report['n_errors']}  "
+            "-> aggregate metrics above are over a PARTIAL sample and are not valid.",
+            file=sys.stderr,
+        )
+        print("=" * 72, file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
