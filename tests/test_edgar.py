@@ -56,3 +56,25 @@ def test_clean_section():
     assert _clean_section("Item 1A. | Risk Factors | 12") == "Item 1A. Risk Factors"
     assert _clean_section("Item 7. MD&A") == "Item 7. MD&A"
     assert _clean_section(None) is None
+
+
+def test_coverage_check_flags_truncated_10k():
+    from sec_rag.edgar.client import Filing
+    from sec_rag.edgar.live_engine import _coverage_check
+
+    def mk(form):
+        return Filing(cik="0000320193", company="Apple Inc.", form=form,
+                      filing_date="2026-01-01", accession="0000320193-26-000001",
+                      primary_doc="a.htm", url="http://x")
+
+    sig = "Pursuant to the requirements of Section 13 or 15(d) of the Securities Exchange Act"
+    # Full 10-K reaching the signature page -> ok, and the detail carries the metrics.
+    ok, detail = _coverage_check(mk("10-K"), f"...body... {sig} ...", 90, ["Item 16"])
+    assert ok is True
+    assert "reached_sig=True" in detail and "90 chunks" in detail
+    # A 10-K whose text stops before the signature -> flagged (likely truncated).
+    ok, detail = _coverage_check(mk("10-K"), "cover page and Item 1 only", 3, ["Item 1"])
+    assert ok is False and "reached_sig=False" in detail
+    # 10-Q held to the same expectation; 8-K (event report) never flagged.
+    assert _coverage_check(mk("10-Q"), "short, no signature", 2, [None])[0] is False
+    assert _coverage_check(mk("8-K"), "short event report", 2, [None])[0] is True

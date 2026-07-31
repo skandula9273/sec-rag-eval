@@ -12,6 +12,7 @@ the live path identically.
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 import uuid
@@ -38,6 +39,35 @@ def _normalize(mat: np.ndarray) -> np.ndarray:
 
 _FORM_8K = re.compile(r"\b(8-?k|press release|announce|acquisition|merger|event|material)\b", re.I)
 _FORM_10Q = re.compile(r"\b(quarter|quarterly|q[1-4]\b|10-?q|three months|most recent quarter)\b", re.I)
+
+_log = logging.getLogger(__name__)
+
+# A full 10-K/10-Q ends with the SEC signature attestation ("...requirements of
+# Section 13..."). It's the most reliable end-of-document marker across issuers —
+# Item numbering varies (some 10-Ks stop at Item 15, others reach Item 16), but the
+# signature page does not. Used only as a coverage/observability signal.
+_SIG_MARKER = re.compile(r"requirements of section\s*13", re.I)
+
+
+def _coverage_check(
+    filing: Filing, text: str, n_chunks: int, sections: list[str | None]
+) -> tuple[bool, str]:
+    """Did a fetched filing come through whole? Returns (ok, human-readable detail).
+
+    ``ok`` is False only when an annual/quarterly report's extracted text never
+    reaches the §13 signature attestation — the tell that the fetch/parse silently
+    truncated the document (the failure mode a plausible-looking answer would hide).
+    8-Ks and other event filings are never flagged (they carry no such expectation).
+    Pure — no I/O, no logging — so it is unit-testable; the caller does the logging.
+    """
+    reached_sig = bool(_SIG_MARKER.search(text))
+    last_section = sections[-1] if sections else None
+    detail = (
+        f"{filing.form} {filing.company} {filing.accession}: {n_chunks} chunks, "
+        f"{len(text)} chars, last_section={last_section!r}, reached_sig={reached_sig}"
+    )
+    ok = not (filing.form in ("10-K", "10-Q") and not reached_sig)
+    return ok, detail
 
 
 def detect_form(question: str) -> str:
@@ -195,6 +225,15 @@ class LiveEngine:
         )
         contents = [c.content for c in chunks]
         sections = [_clean_section(c.section) for c in chunks]
+        # Coverage guardrail (observability, not a hard gate): surface how much was
+        # indexed and warn if a 10-K/10-Q didn't reach its signature page, so a
+        # silent truncation can't hide behind a plausible answer. We still index
+        # what we got — a partial answer beats a failed demo.
+        ok, detail = _coverage_check(filing, text, len(chunks), sections)
+        if ok:
+            _log.info("live filing indexed — %s", detail)
+        else:
+            _log.warning("live filing may be TRUNCATED (no §13 signature reached) — %s", detail)
         vecs = _normalize(np.asarray(emb.embed(contents), dtype=np.float32))
         idx = IndexedFiling(filing=filing, contents=contents, vecs=vecs, sections=sections)
         self._cache[filing.accession] = idx
