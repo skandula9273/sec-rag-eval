@@ -6,9 +6,12 @@ engine** behind it whose every design choice was measured one variable at a time
 against a public benchmark (FinanceBench).
 
 The point was never one pipeline — it's *proving which choice moves which metric,
-and at what cost.* The result is a measured ablation (recall@5 0.44 → **0.64**,
-tables 0.32 → **0.70**) plus a live product that scales the same RAG to ~10,400
-companies.
+and at what cost.* The result is a measured ablation over an **84-filing,
+15,192-chunk** benchmarked corpus (fuzzy recall@5 0.44 → **0.64**, tables 0.32 →
+**0.70** — see the metric caveat under Results), plus a live product that reaches
+any of the **~10,400 companies** in EDGAR's ticker→CIK map, fetching + indexing a
+filing on demand. That ~10,400 is the live path's *reach*, not the size of the
+benchmarked corpus.
 
 ## ▶ Live demo
 
@@ -46,15 +49,33 @@ Live config: dense + **`text-embedding-3-large` @ 1536-d** (Matryoshka) +
 
 | Metric | V0 (3-small/512) | **V2 (3-large@1536/1024)** | V2 target |
 |---|---|---|---|
-| recall@5 | 0.44 | **0.64** | 0.75 |
-| recall@10 | 0.54 | **0.74** | — |
-| tables@5 | 0.32 | **0.70** | — |
+| recall@5 (fuzzy) | 0.44 | **0.64** | 0.75 |
+| recall@10 (fuzzy) | 0.54 | **0.74** | — |
+| tables@5 (fuzzy) | 0.32 | **0.70** | — |
 | faithfulness | 0.94 | **0.93** | 0.80 ✓ |
 | cost / query | $0.0063 | ~$0.005–0.009 | <$0.005 |
 
-The headline came from **one lever — the embedding model** — found by rejecting
-five others (hybrid, reranker ×2, table-extraction, smaller chunks) in a measured
-ablation. The full table and the reasoning are in
+**Read recall@5 as a fuzzy hit rate, not strict recall.** fuzzy(0.5) counts a hit
+when ≥50% of a question's gold-evidence *tokens* appear anywhere in a retrieved
+chunk — order-free, and blind to number swaps ("grew 5%" vs "grew 25%"). Under
+**strict substring** matching (the gold span must appear verbatim in one chunk) the
+same V0 config scores recall@5 **0.0667** and tables@5 **0.00**
+(`financebench_20260604T022143Z.json`) — FinanceBench's gold spans are large,
+multi-line tables that rarely survive a chunk boundary intact, so substring
+understates while fuzzy is the generous end; true recall sits between them. One
+coupling to keep honest: *"recall@k is partly inflated by larger chunks (fuzzy
+overlap vs large gold spans)"* (`ablation_chunksize_large_20260627T205004Z.json`) —
+a 1024-token chunk clears the 50% bar more easily than a 512, so part of the
+chunk-size gain is metric, not retrieval.
+
+The V0→V2 jump moved **two** variables — the embedding model (3-small → 3-large@1536)
+*and* chunk size (512 → 1024). The ablations isolate them: at a fixed 512-token
+chunk the model change is **+0.133** (0.44 → 0.573), and over 3-large the chunk
+change is **+0.067** (0.573 → 0.64) — so the embedding is the larger lever (~2/3 of
+the +0.20 headline), but **roughly a third is the chunk-size change**. The 2×2 is
+**not fully crossed — 3-small @ 1024 was never run**, so the model×chunk interaction
+is unmeasured. Five other levers (hybrid, reranker ×2, table-extraction, smaller
+chunks) were measured and rejected. The full table and the reasoning are in
 [`docs/depth-round.md`](docs/depth-round.md); a version-by-version summary is in
 [`docs/versions.md`](docs/versions.md) and the decisions/steps narrative in
 [`docs/decisions-and-steps.md`](docs/decisions-and-steps.md).
@@ -122,6 +143,7 @@ in `web/`) — it auto-points at the local API. Cloud Run deploy: [`DEPLOY.md`](
 ## Notes
 
 - **Reproducible:** fixed seed (13), temp 0, pinned `requirements.lock`, eval JSON
-  committed per run. 70 unit tests cover the pure logic.
+  committed per run. 67 test functions (71 `pytest` cases — one is parametrized)
+  cover the pure logic.
 - **License:** FinanceBench is CC-BY-NC-4.0 — non-commercial portfolio work; PDFs
   are not redistributed (`data/` is gitignored).
