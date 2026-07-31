@@ -1,17 +1,38 @@
 # sec-filings-rag
 
-Retrieval-augmented QA over US SEC filings, built two ways: a **live tool** that
-answers about any public company from its newest filings, and a **benchmarked
-engine** behind it whose every design choice was measured one variable at a time
-against a public benchmark (FinanceBench).
+An **evaluation platform for retrieval-augmented QA** — matcher-validated recall,
+audited LLM judges, one-variable ablations, a confound-crossed headline, and an eval
+that runs on every PR. The RAG system it drives (a live EDGAR tool + a benchmarked
+engine over SEC filings) is the **subject under test, not the point**: the platform's
+job is to say which design choice moved which metric, by how much, and how much of
+that was real rather than an artifact of how it was scored.
 
-The point was never one pipeline — it's *proving which choice moves which metric,
-and at what cost.* The result is a measured ablation over an **84-filing,
-15,192-chunk** benchmarked corpus (fuzzy recall@5 0.44 → **0.64**, tables 0.32 →
-**0.70** — see the metric caveat under Results), plus a live product that reaches
-any of the **~10,400 companies** in EDGAR's ticker→CIK map, fetching + indexing a
-filing on demand. That ~10,400 is the live path's *reach*, not the size of the
-benchmarked corpus.
+What it measures — and what it found on its own subject, caveats first:
+
+- **Retrieval, scored three ways, then validated.** recall is an evidence-hit rate,
+  and the rate is mostly a property of the *matcher*: identical V2 retrieval reads as
+  recall@5 **0.093 / 0.64 / 0.807** under strict / fuzzy / semantic matching. A
+  50-pair label study (Cohen's κ) finds the committed fuzzy matcher best-adjudicated
+  (κ 0.67) *and* a slight over-estimate — ~1 in 4 of its hits isn't a real support.
+  The labels are an LLM proxy, not human; that caveat is load-bearing.
+  → [`docs/metric-validity-study.md`](docs/metric-validity-study.md)
+- **The LLM judge is audited, not trusted.** A second model (Opus) re-checked the
+  Haiku faithfulness judge on 20 verdicts — 19/20 agree, and the one miss is *harsh*,
+  not lenient — so the committed **0.929** isn't a soft self-grade. Faithfulness is
+  grounding, not correctness; measured correctness is **0.50** over 150 questions.
+- **Confounds are crossed before a win is claimed.** V0→V2 moved two variables at
+  once; the full 2×3×3 grid attributes the +0.207 recall gain as **~80% real system
+  improvement and ~20% chunk-size metric inflation**, with the embedding effect
+  overstated by fuzzy overlap (+0.127) versus the honest ~+0.05.
+- **The eval runs in CI.** A retrieval-only smoke gate scores every PR against a
+  committed recall@5 baseline, under the label-validated matcher.
+
+**The subject under test:** a live EDGAR tool that answers about any of the
+**~10,400 companies** in EDGAR's ticker→CIK map from their newest 10-K/10-Q/8-K on
+demand, and a benchmarked engine over an **84-filing / 15,192-chunk** FinanceBench
+corpus — one shared RAG pipeline, so the eval numbers describe the deployed system.
+Headline: recall@5 0.44 → **0.64** (fuzzy), correctness **0.50**, faithfulness
+**0.93** — read as brackets, not points (see Results).
 
 ## ▶ Live demo
 
