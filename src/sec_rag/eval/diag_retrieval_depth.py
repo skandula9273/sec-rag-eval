@@ -47,7 +47,8 @@ def main():
     try:
         for q in qs:
             qvec = engine.embedder.embed_one(q.question)
-            chunks = dense_search(engine.conn, qvec, DEEP)
+            with engine.connection() as conn:
+                chunks = dense_search(conn, qvec, DEEP)
             r = evidence_match_rank([c.content for c in chunks], q.evidence_texts, mode="fuzzy")
             counts[bucket(r)] += 1
             ranks.append(r)

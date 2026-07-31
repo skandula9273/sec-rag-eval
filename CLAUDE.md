@@ -72,12 +72,14 @@ read the code and scrutinize the numbers. Treat every output that way.
   0.75 target. Five other levers (hybrid, reranker ×2, table-extraction, smaller
   chunks) were measured and rejected — full ablation table in `docs/depth-round.md`.
 
-- **Remaining gaps:** (1) **latency** — now measured on the live API (server p50
+- **Remaining gaps:** (1) **latency** — measured on the live API (server p50
   **2.06 s**, p95 **6.19 s**; artifact `eval_results/api_latency_20260731T004411Z
-  .json`). The **p50 meets** the <2.5 s target; the **p95 (6.2 s) does not** — the
-  tail is generation-bound (long multi-claim answers), and the connection pool +
-  judge-off-path work is still open (the eval path is still ~15 s with the judge
-  on). Streaming TTFT ~1.0 s already gives a fast *perceived* response. (2) **faithfulness is self-graded** (Haiku judges Haiku).
+  .json`). The **p50 meets** the <2.5 s target; the **p95 (6.2 s) does not**. The
+  plumbing levers are now **done**: connection pool shipped (concurrent retrieval
+  4.9× — see debt section), and the faithfulness judge is confirmed off the
+  request path. What remains is purely the **generation tail** (a long multi-claim
+  answer is the p95), which needs output-length/model work, not infra. Streaming
+  TTFT ~1.0 s already gives a fast *perceived* response. (2) **faithfulness is self-graded** (Haiku judges Haiku).
   Now audited: a 20-q independent spot-check (Opus adjudicator) agrees with the
   judge **19/20 (95%)**, and the one miss is *harsh*, not lenient — so 0.929 is not
   inflated by a soft grader. But **correctness-vs-gold is still not directly
@@ -218,12 +220,20 @@ Match that shape without being asked.
 
 ## Known engineering debt (on record, address before claiming production-grade)
 
-- **Single shared DB connection serializes queries.** Safe (verified 6/6
-  concurrent) but a throughput ceiling and a latency contributor. A connection
-  pool is the fix.
-- **p95 latency ~15.6 s is over the <5 s floor.** Generation + the inline
-  faithfulness judge (a second Haiku call) dominate the critical path. Levers:
-  connection pool, move the judge off the request path, batch.
+- ~~**Single shared DB connection serializes queries.**~~ **FIXED** — the
+  QueryEngine now uses a psycopg connection pool (`db/pool.new_pool`, default
+  min=1/max=8, env-tunable). Measured on Neon at 24-way concurrency (retrieval
+  isolated, `eval_results/pool_bench_20260731T011348Z.json`): wall **979 ms →
+  201 ms (4.9×)**, throughput **24 → 120 qps**, tail p95 **934 ms → 193 ms**. Also
+  removes the single-socket point of failure (the pool auto-reconnects; the manual
+  reconnect dance is gone). *Single-request* latency is unchanged — retrieval was
+  never the single-query bottleneck; this is a concurrency/throughput fix.
+- **p95 latency: live API 6.2 s (generation-bound); eval path ~15 s with the
+  judge on.** Levers now stand as: the **connection pool is done** (above); the
+  **faithfulness judge is already off the request path** (verified — `/query`
+  passes `with_faithfulness=False`, `/query/stream` never judges; commit
+  `e7491dd`). What's left is the **generation tail** — a long multi-claim answer
+  is the p95, not infra — which needs output-length/model work, not plumbing.
 - **Eval runner swallows infra failures.** The per-question resilience (commit
   `3b3880b`) let a billing outage masquerade as 77 question failures while still
   emitting aggregate recall. Harden it to treat billing/auth errors as fatal (or

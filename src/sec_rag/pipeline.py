@@ -11,12 +11,13 @@ from __future__ import annotations
 import time
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import psycopg
 
 from sec_rag.config import Config, Secrets
-from sec_rag.db.pool import new_connection
+from sec_rag.db.pool import new_pool
 from sec_rag.generate.answer import generate_answer, generate_answer_stream
 from sec_rag.generate.faithfulness import score_faithfulness
 from sec_rag.ingest.embed import Embedder
@@ -54,19 +55,19 @@ def _build_citations(retrieved: list[RetrievedChunk], cited_indices: list[int]) 
 
 
 class QueryEngine:
-    """Holds the embedder + a long-lived DB connection across queries."""
+    """Holds the embedder + a pool of DB connections shared across queries."""
 
     def __init__(self, cfg: Config, secrets: Secrets | None = None):
         self.cfg = cfg
         self.secrets = secrets or Secrets()
         self.embedder = Embedder(cfg.embedding, self.secrets)
-        # autocommit: this connection is long-lived and read-only. Without it,
-        # psycopg leaves an open transaction after each query and an idle engine
-        # gets killed by Neon's idle-in-transaction timeout (see db/pool.py).
-        self.conn = new_connection(self.secrets, autocommit=True)
+        # A pool of pgvector-aware autocommit connections. Was a single shared
+        # connection, which serialized concurrent retrieval and was a single point
+        # of failure; the pool parallelizes and auto-reconnects (see db/pool.new_pool).
+        self.pool = new_pool(self.secrets)
 
     def close(self) -> None:
-        self.conn.close()
+        self.pool.close()
 
     def __enter__(self) -> "QueryEngine":
         return self
@@ -74,19 +75,28 @@ class QueryEngine:
     def __exit__(self, *exc) -> None:
         self.close()
 
+    @contextmanager
+    def connection(self) -> Iterator[psycopg.Connection]:
+        """Borrow a pooled connection (context-managed), returned to the pool on
+        exit. For callers (ablation scripts) that run a retriever against the
+        engine's DB directly instead of via retrieve()."""
+        with self.pool.connection() as conn:
+            yield conn
+
     def _candidates(self, query: str, qvec: list[float], depth: int) -> list[RetrievedChunk]:
         """Top-``depth`` from the configured base retriever (dense | hybrid | lexical)."""
         r = self.cfg.retrieval
-        if r.method == "hybrid":
-            return hybrid_search(
-                self.conn, qvec, query, depth,
-                candidates=r.candidates, k_rrf=r.k_rrf, dense_weight=r.dense_weight,
-            )
-        if r.method == "lexical":
-            return lexical_search(self.conn, query, depth)
-        if r.method == "dense":
-            return dense_search(self.conn, qvec, depth)
-        raise ValueError(f"unknown retrieval.method: {r.method!r}")
+        if r.method not in ("dense", "hybrid", "lexical"):
+            raise ValueError(f"unknown retrieval.method: {r.method!r}")
+        with self.pool.connection() as conn:
+            if r.method == "hybrid":
+                return hybrid_search(
+                    conn, qvec, query, depth,
+                    candidates=r.candidates, k_rrf=r.k_rrf, dense_weight=r.dense_weight,
+                )
+            if r.method == "lexical":
+                return lexical_search(conn, query, depth)
+            return dense_search(conn, qvec, depth)
 
     def _search(self, query: str, qvec: list[float], k: int) -> list[RetrievedChunk]:
         """Retrieve top-k, optionally reranking a wider candidate pool first (V1.2).
@@ -102,22 +112,16 @@ class QueryEngine:
         return self._candidates(query, qvec, k)
 
     def _retrieve(self, query: str, qvec: list[float], k: int) -> list[RetrievedChunk]:
-        """Retrieve with one reconnect on a dead connection.
+        """Retrieve with one retry on a dropped connection.
 
-        The engine holds one long-lived connection. autocommit (see __init__)
-        stops idle-in-transaction kills, but a hard network drop or a
-        server-side recycle can still leave a dead socket — every later query
-        would then 500. Detect the broken connection, rebuild it once, and
-        retry. Read-only, so the retry is safe.
+        The pool transparently reconnects, but a connection Neon recycled or
+        killed silently can still surface as an OperationalError on first use.
+        The pool discards that connection when the failed borrow returns, so
+        retrying once simply borrows a fresh one. Read-only, so the retry is safe.
         """
         try:
             return self._search(query, qvec, k)
         except psycopg.OperationalError:
-            try:
-                self.conn.close()
-            except Exception:
-                pass
-            self.conn = new_connection(self.secrets, autocommit=True)
             return self._search(query, qvec, k)
 
     def retrieve(

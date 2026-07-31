@@ -52,8 +52,9 @@ def main() -> None:
     try:
         for q in questions:
             qvec = engine.embedder.embed_one(q.question)
-            dlist = dense_search(engine.conn, qvec, candidates)
-            llist = lexical_search(engine.conn, q.question, candidates)
+            with engine.connection() as conn:
+                dlist = dense_search(conn, qvec, candidates)
+                llist = lexical_search(conn, q.question, candidates)
             cached.append((dlist, llist, q.evidence_texts, q.question_type or "uncategorized"))
     finally:
         engine.close()
