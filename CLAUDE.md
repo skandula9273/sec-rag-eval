@@ -38,13 +38,24 @@ read the code and scrutinize the numbers. Treat every output that way.
 
   | Metric | v0 (3-small/512) | **v2 (3-large@1536/1024)** | V2 target |
   |---|---|---|---|
-  | recall@5 | 0.44 | **0.64** | 0.75 |
-  | recall@10 | 0.54 | **0.74** | — |
-  | MRR | 0.317 | **0.492** | — |
-  | tables@5 | 0.32 | **0.70** | — |
+  | recall@5 (fuzzy 0.5, primary) | 0.44 | **0.64** | 0.75 |
+  | recall@5 (substring, strict floor) | 0.067 | **0.093** | — |
+  | recall@10 (fuzzy 0.5) | 0.54 | **0.74** | — |
+  | recall@10 (substring, strict floor) | 0.107 | **0.127** | — |
+  | MRR (fuzzy) | 0.317 | **0.492** | — |
+  | tables@5 (fuzzy) | 0.32 | **0.70** | — |
   | faithfulness | 0.941 | **0.929** ✓ | 0.80 |
   | cost / query | $0.0063 | **$0.009** (eval; API ~$0.005–6) | <$0.005 |
   | p95 latency (e2e) | ~15.6 s | **~15.3 s** (eval w/ judge; API faster) | <2.5 s ✗ |
+
+  **Read recall as a bracket, not a point.** fuzzy(0.5) is a set token-overlap hit
+  (generous — blind to number swaps like "grew 5%" vs "grew 25%"); substring
+  demands the gold span survive verbatim in one chunk (unfairly strict — spans
+  cross chunk boundaries). True recall@5 sits in **[0.093, 0.64]** for v2. What
+  matters: the gain survives the *strict* metric too — substring recall@5
+  **0.067 → 0.093**, recall@10 **0.107 → 0.127** — so 3-large is real retrieval
+  signal, not a fuzzy-overlap artifact. Substring floor (v2, 150 q):
+  `eval_results/financebench_20260730T232517Z.json`.
 
   Full v2 baseline: `eval_results/financebench_20260629T193049Z.json` (150 q,
   full pipeline, 0 errors). Cost/latency above are EVAL numbers (top_k=10 + judge
@@ -58,8 +69,14 @@ read the code and scrutinize the numbers. Treat every output that way.
 
 - **Remaining gaps:** (1) **latency** — p95 ~15.6 s vs <2.5 s, untouched; the free
   engineering track (connection pool + faithfulness judge off the request path).
-  (2) The **full v2 eval** (recall + faithfulness + cost through generation) is
-  pending Anthropic credits; only retrieval-only recall is measured so far.
+  The "API faster/cheaper than eval" note above is asserted, **not yet measured**
+  with a committed run. (2) **faithfulness is self-graded** (Haiku judges Haiku).
+  Now audited: a 20-q independent spot-check (Opus adjudicator) agrees with the
+  judge **19/20 (95%)**, and the one miss is *harsh*, not lenient — so 0.929 is not
+  inflated by a soft grader. But **correctness-vs-gold is still not directly
+  scored**: several answers are faithful-but-wrong (grounded in the wrong retrieved
+  evidence), so faithfulness is a grounding signal, not accuracy. Audit:
+  `docs/faithfulness-spotcheck.md`.
 - Authoritative current state: this section + `docs/depth-round.md` (the ablation
   record). The dated session summaries are historical.
 
@@ -76,12 +93,16 @@ beats dense**: lexical-only recall@5 **0.04**, tables@5 **0.00**.
 
 **Conclusion (decided):** pure dense is the recall ceiling on this corpus; hybrid
 is **retired as a recall lever** (dense stays the default; the `dense_weight` knob
-is kept, favouring dense). **The deeper finding:** lexical's 0.00 on tables means
-the exact line-item terms aren't in the chunk text — **pypdf flattened the tables
-at parse time** — so no retriever can surface evidence parsing already destroyed.
-The tables gap is a **parsing problem, not a retrieval-method one** → **table
-extraction** (unstructured.io / llama-parse) is the next real lever, ahead of the
-reranker. Full reasoning + depth-round write-up: `docs/depth-round.md`. Committed
+is kept, favouring dense). **The V1.1 hypothesis (since RETRACTED):** lexical's
+0.00 on tables looked like pypdf had flattened the tables at parse time, making the
+gap a *parsing* problem no retriever could fix. **That was wrong** — see the
+design-doc amendment `2026-06-26 — Correction: tables gap is ranking + recall,
+NOT parsing`. The 3-large embedding swap lifted tables@5 **0.32 → 0.72** on the
+*same* pypdf-parsed chunks; had parsing destroyed the line items, no retriever
+could have surfaced them. The tables gap was a **retrieval-representation** problem
+(fixed by the embedding model — the V2 lever), not a parsing one, so table
+extraction is NOT the next lever it appeared to be here. Full reasoning +
+depth-round write-up: `docs/depth-round.md`. Committed
 A/B JSONs: `financebench_20260615T210625Z.json` (dense), `...212005Z.json`
 (hybrid), `ablation_fusion_20260615T214346Z.json` (sweep).
 
@@ -145,10 +166,11 @@ changing at a time against the committed 0.44 baseline:
 - **V1.4 — Full three-layer eval** (FinanceBench + custom 100 + faithfulness
   judge); per-category ablation table is the deliverable.
 
-**Open resequencing (needs a dated design-doc amendment before acting):** the
-V1.1b ablation is evidence that **table extraction** — parked in V2 below — is the
-real lever on the 0.32 tables gap and should likely come *before* the
-reranker/corpus work. Propose the amendment; do not silently reorder.
+**Resequencing (RESOLVED):** the V1.1b ablation *suggested* table extraction was
+the real lever on the 0.32 tables gap. The later embedding-model ablation
+disproved that — 3-large lifted tables@5 to 0.72 on the same parsed chunks (see the
+`2026-06-26` correction amendment). The tables lever was the **embedding model**,
+now shipped in V2; table extraction is no longer the indicated next step.
 
 **Still out of scope until V2** — do not pull forward without a told-to-do-it:
 time-decay scoring, table-extraction ablation, embedding-model comparison,
