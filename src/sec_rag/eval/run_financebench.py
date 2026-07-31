@@ -22,10 +22,44 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from sec_rag.config import Config, load_config
+from sec_rag.eval.answer_accuracy import AnswerScore, score_answer
 from sec_rag.eval.metrics import evidence_match_rank, hit_rate_at_k, mean_reciprocal_rank
 from sec_rag.generate.answer import PRICING
 from sec_rag.ingest.financebench import Question, load_questions
 from sec_rag.pipeline import QueryEngine
+
+
+def _accuracy_block(scores: list[AnswerScore]) -> dict:
+    """Aggregate answer-accuracy over a set of scored questions.
+
+    Refusals are reported separately and EXCLUDED from the accuracy denominator — an
+    unanswered question is not a wrong one. LLM accuracy = correct / answered; the
+    numeric matcher only applies to single-figure golds, so its denominator is the
+    subset it can score. ``accuracy_over_all`` (correct / everything) is shown too so
+    a high refusal rate can't quietly inflate the headline accuracy."""
+    n = len(scores)
+    answered = [s for s in scores if not s.refused]
+    n_ref = n - len(answered)
+    llm_correct = sum(1 for s in answered if s.llm_correct)
+    num_applic = [s for s in answered if s.numeric is not None]
+    num_correct = sum(1 for s in num_applic if s.numeric)
+    return {
+        "n": n,
+        "n_refused": n_ref,
+        "refusal_rate": round(n_ref / n, 4) if n else None,
+        "n_answered": len(answered),
+        "llm": {
+            "n_graded": len(answered),
+            "n_correct": llm_correct,
+            "accuracy": round(llm_correct / len(answered), 4) if answered else None,
+            "accuracy_over_all": round(llm_correct / n, 4) if n else None,
+        },
+        "numeric": {
+            "n_applicable": len(num_applic),
+            "n_correct": num_correct,
+            "accuracy": round(num_correct / len(num_applic), 4) if num_applic else None,
+        },
+    }
 
 
 def _percentile(values: list[float], p: float) -> float:
@@ -50,16 +84,26 @@ def run(
     match_mode: str = "substring",
     sleep_s: float = 0.0,
     retrieval_only: bool = False,
+    score_accuracy: bool = False,
+    accuracy_judge_model: str | None = None,
 ) -> dict:
     ks = sorted(cfg.eval.recall_ks)
     top_k = max(ks)
     questions = _select(load_questions(cfg.eval.dataset), limit, cfg.eval.seed)
+    # Accuracy needs the generated answer, so it forces the full pipeline; the judge
+    # model is recorded in the output. Faithfulness is turned off on an accuracy run
+    # (the accuracy judge is the added call) — it is measured separately.
+    if score_accuracy:
+        retrieval_only = False
+    judge_model = accuracy_judge_model or cfg.generation.model
 
     ranks: list[int | None] = []
     by_cat: dict[str, list[int | None]] = defaultdict(list)
     latencies: list[float] = []
     costs: list[float] = []
     faithfulness_scores: list[float] = []  # populated only when eval.faithfulness on
+    acc_scores: list[AnswerScore] = []                          # accuracy: overall
+    acc_by_cat: dict[str, list[AnswerScore]] = defaultdict(list)  # accuracy: per category
     misses_no_evidence = 0
     errors: list[dict] = []  # questions that failed even after a retry
 
@@ -74,13 +118,21 @@ def run(
     # pure retrieval metrics, so they need only the query embedding + the DB. cost
     # and faithfulness are then None — there was no generation to price or judge.
     # The retrieval path is identical to full mode, so the recall is the same.
-    def _evaluate(engine: QueryEngine, question: str):
+    def _evaluate(engine: QueryEngine, q: Question):
         if retrieval_only:
-            chunks, retr_ms = engine.retrieve(question, top_k=top_k)
-            return [c.content for c in chunks], retr_ms, None, None
-        res = engine.run(question, top_k=top_k)
+            chunks, retr_ms = engine.retrieve(q.question, top_k=top_k)
+            return [c.content for c in chunks], retr_ms, None, None, None
+        # Accuracy folds its judge call into this retried unit, so a judge failure
+        # retries with the rest of the question rather than crashing the run.
+        wf = False if score_accuracy else None  # accuracy run: faithfulness judge off
+        res = engine.run(q.question, top_k=top_k, with_faithfulness=wf)
         m = res.response.metrics
-        return [c.excerpt for c in res.response.citations], m.latency_ms, m.cost_usd, m.faithfulness
+        acc = None
+        if score_accuracy:
+            acc = score_answer(q.question, q.answer, res.response.answer,
+                               judge_model=judge_model, secrets=engine.secrets)
+        excerpts = [c.excerpt for c in res.response.citations]
+        return excerpts, m.latency_ms, m.cost_usd, m.faithfulness, acc
 
     # With faithfulness on, each full-mode question makes two Anthropic calls
     # (answer + judge); 150 back-to-back can saturate a low account rate limit.
@@ -92,7 +144,7 @@ def run(
             if sleep_s and i > 0:
                 time.sleep(sleep_s)
             try:
-                contents, latency, cost, faith = _evaluate(engine, q.question)
+                contents, latency, cost, faith, acc = _evaluate(engine, q)
             except Exception:
                 # Rebuild the engine (new DB connection) and try once more.
                 try:
@@ -101,7 +153,7 @@ def run(
                     pass
                 try:
                     engine = QueryEngine(cfg)
-                    contents, latency, cost, faith = _evaluate(engine, q.question)
+                    contents, latency, cost, faith, acc = _evaluate(engine, q)
                 except Exception as second_exc:
                     errors.append({"id": q.id, "error": f"{type(second_exc).__name__}: {second_exc}"})
                     continue
@@ -109,12 +161,16 @@ def run(
                 misses_no_evidence += 1
             rank = evidence_match_rank(contents, q.evidence_texts, mode=match_mode)
             ranks.append(rank)
-            by_cat[q.question_type or "uncategorized"].append(rank)
+            cat = q.question_type or "uncategorized"
+            by_cat[cat].append(rank)
             latencies.append(latency)
             if cost is not None:
                 costs.append(cost)
             if faith is not None:
                 faithfulness_scores.append(faith)
+            if acc is not None:
+                acc_scores.append(acc)
+                acc_by_cat[cat].append(acc)
     finally:
         engine.close()
 
@@ -123,7 +179,7 @@ def run(
         "n_questions": len(questions),       # questions attempted
         "n_scored": len(ranks),              # questions that produced a result
         "match_mode": match_mode,
-        "mode": "retrieval_only" if retrieval_only else "full",
+        "mode": "accuracy" if score_accuracy else ("retrieval_only" if retrieval_only else "full"),
         "config": {
             "chunking": cfg.chunking.model_dump(),
             "embedding_model": cfg.embedding.model,
@@ -159,6 +215,14 @@ def run(
             if faithfulness_scores else None,
             "n_scored": len(faithfulness_scores),
         },
+        # Answer accuracy vs FinanceBench gold (null unless --accuracy). Refusal rate
+        # is reported separately and excluded from the accuracy denominator.
+        "answer_accuracy": None if not score_accuracy else {
+            "judge_model": judge_model,
+            "numeric_normalizer": "src/sec_rag/eval/answer_accuracy.py (rules in the docstring)",
+            "overall": _accuracy_block(acc_scores),
+            "per_category": {c: _accuracy_block(s) for c, s in sorted(acc_by_cat.items())},
+        },
         "questions_without_evidence": misses_no_evidence,
         "n_errors": len(errors),
         "errors": errors,  # ids + messages for any question that failed twice
@@ -184,6 +248,18 @@ def main() -> None:
         help="retrieval-only: score recall@k/MRR without generation or faithfulness "
         "(no Anthropic calls; only OpenAI query embeddings + the DB)",
     )
+    ap.add_argument(
+        "--accuracy",
+        action="store_true",
+        help="also score answer accuracy vs FinanceBench gold (numeric matcher + LLM "
+        "judge), overall + per category, with refusal rate reported separately",
+    )
+    ap.add_argument(
+        "--accuracy-judge-model",
+        default=None,
+        help="LLM correctness judge model (default: the generation model); "
+        "recorded in the JSON",
+    )
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -193,6 +269,8 @@ def main() -> None:
         match_mode=args.match_mode,
         sleep_s=args.sleep,
         retrieval_only=args.no_generate,
+        score_accuracy=args.accuracy,
+        accuracy_judge_model=args.accuracy_judge_model,
     )
 
     out_dir = Path(args.out_dir)
@@ -212,6 +290,14 @@ def main() -> None:
     print(f"  latency p50/p95 ms = {report['latency_ms']['p50']}/{report['latency_ms']['p95']}")
     if report["cost_usd"] is not None:
         print(f"  cost/query (est) = ${report['cost_usd']['mean_per_query']}")
+    acc = report.get("answer_accuracy")
+    if acc:
+        o = acc["overall"]
+        L, N = o["llm"], o["numeric"]
+        print(f"  accuracy (judge {acc['judge_model']}):")
+        print(f"    LLM     = {L['accuracy']}  ({L['n_correct']}/{o['n_answered']} answered)")
+        print(f"    numeric = {N['accuracy']}  ({N['n_correct']}/{N['n_applicable']} figure-golds)")
+        print(f"    refusal = {o['refusal_rate']}  ({o['n_refused']}/{o['n']})")
 
 
 if __name__ == "__main__":
