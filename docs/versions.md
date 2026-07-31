@@ -30,9 +30,11 @@ five rejected → the embedding model was the lever → dense @ 3-large@1536 / 1
 
 ## Part 2 — The product (static frontend + live EDGAR)
 
-A dark, uplifting single-page app on **GitHub Pages**
-(`skandula9273.github.io/sec-rag-eval`) that streams grounded, cited answers from
-the deployed API. Then it grew from "our fixed corpus" to "any company, live."
+A dark, uplifting single-page app served from **Cloud Run**
+(`sec-rag-web-200217758117.us-east1.run.app`, cache-proof `no-store` headers) that
+streams grounded, cited answers from the deployed API. Then it grew from "our fixed
+corpus" to "any company, live." (An earlier GitHub Pages host was retired — its
+10-min CDN cache served stale JS after deploys; see PROJECT-LOG.)
 
 | Build | What shipped |
 |---|---|

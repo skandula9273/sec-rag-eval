@@ -17,8 +17,9 @@ read the code and scrutinize the numbers. Treat every output that way.
 - Phase: **Shipped — benchmarked V2 engine + a live EDGAR product on top.** Two
   surfaces share one RAG engine. The retrieval ablation is complete; the product
   has been built out and deployed.
-- **Live EDGAR product (built after V2):** a static frontend on GitHub Pages
-  (`skandula9273.github.io/sec-rag-eval`, code in `web/`) calling the deployed API.
+- **Live EDGAR product (built after V2):** a static frontend served from Cloud Run
+  (`sec-rag-web-200217758117.us-east1.run.app`, cache-proof `no-store`; code in
+  `web/`) calling the deployed API.
   Enter a ticker → fetch that company's newest **10-K/10-Q/8-K** live from EDGAR
   (auto-detected; multi-filing compare for year-over-year), index on demand
   (`src/sec_rag/edgar/`, in-memory + Neon cache), stream a grounded, **section-cited**

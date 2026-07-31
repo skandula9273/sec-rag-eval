@@ -21,7 +21,10 @@ years and it pulls multiple filings. Leave the ticker blank to query the
 pre-indexed FinanceBench sample corpus. Optional **BYOK** (⚙) runs it on your own
 OpenAI + Anthropic keys.
 
-*First query on a never-seen filing is ~15–25 s (fetch + embed); cached after that.*
+*No keys needed — the demo runs on the owner's API keys (rate-limited); ⚙ BYOK is
+optional. **Latency:** the first request after idle wakes the service (~13 s cold
+start); warm queries are ~2 s (indexed corpus) / ~6 s (a new EDGAR filing, then
+cached). **Last verified live: 2026-07-31** — `/health` ok, keyless query ok.*
 
 ## What it does
 
@@ -93,7 +96,7 @@ src/sec_rag/
   generate/              answer.py (Haiku, cited) + faithfulness.py (judge)
   api/app.py             FastAPI: /health, /query, /query/stream, /query/live/stream
   eval/                  run_financebench.py + the ablation scripts
-web/                     static frontend (GitHub Pages) — index.html / app.js / style.css
+web/                     static frontend (served from Cloud Run, no-store) — index.html / app.js / style.css
 configs/                 v0.yaml (frozen baseline), v2.yaml (live config)
 docs/                    design-doc (+amendments), depth-round, versions, decisions-and-steps
 eval_results/            committed JSON, one file per complete run
