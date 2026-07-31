@@ -234,7 +234,10 @@ Match that shape without being asked.
   QueryEngine now uses a psycopg connection pool (`db/pool.new_pool`, default
   min=1/max=8, env-tunable). Measured on Neon at 24-way concurrency (retrieval
   isolated, `eval_results/pool_bench_20260731T011348Z.json`): wall **979 ms →
-  201 ms (4.9×)**, throughput **24 → 120 qps**, tail p95 **934 ms → 193 ms**. Also
+  201 ms (4.9×)**, throughput **24 → 120 qps**, tail p95 **934 ms → 193 ms**.
+  Independently **re-verified 2026-07-31** (same A/B, `pool_bench_20260731T191044Z.json`):
+  wall **1190 → 213 ms (5.6×)**, **20 → 113 qps** — the exact ratio floats with Neon
+  network jitter, the win is robustly large either way. Also
   removes the single-socket point of failure (the pool auto-reconnects; the manual
   reconnect dance is gone). *Single-request* latency is unchanged — retrieval was
   never the single-query bottleneck; this is a concurrency/throughput fix.
