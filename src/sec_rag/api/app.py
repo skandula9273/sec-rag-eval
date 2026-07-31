@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import logging
 import os
 import threading
 import time
@@ -27,6 +28,18 @@ from fastapi.responses import StreamingResponse
 from sec_rag.config import Secrets, load_config
 from sec_rag.pipeline import QueryEngine
 from sec_rag.api.schemas import LiveQueryRequest, QueryRequest, QueryResponse
+
+# Surface sec_rag.* logs (e.g. the live-filing coverage guardrail in
+# edgar/live_engine) in Cloud Run. uvicorn configures only its own loggers, and the
+# root logger's last-resort handler drops INFO — so give the sec_rag namespace its
+# own INFO stderr handler (propagate=False to avoid double emit through root).
+_applog = logging.getLogger("sec_rag")
+if not _applog.handlers:
+    _h = logging.StreamHandler()
+    _h.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    _applog.addHandler(_h)
+    _applog.setLevel(logging.INFO)
+    _applog.propagate = False
 
 _state: dict = {"engine": None, "live": None, "error": None}
 
