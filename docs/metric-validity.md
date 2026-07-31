@@ -15,10 +15,15 @@ So "recall@5 = 0.64" is only meaningful if the overlap matcher tracks what a hum
 means by "this chunk supports the answer". This study measures that directly:
 **human labels vs each matcher**, via Cohen's kappa, precision, and recall.
 
-> **Status: harness built; awaiting human labels.** The results tables below are
-> intentionally empty — they are filled by running `label_score.py` after a human
-> labels the sample. No labels were generated automatically; an LLM-labeled study
-> would just measure the LLM, which is the thing under suspicion.
+> **Status: LLM-ADJUDICATED results below (a proxy); human pass still supersedes.**
+> The harness was built for HUMAN labels, and that remains the gold standard. On
+> request, the 50 pairs were also labeled by a Claude judge (`label_auto.py`, judge
+> = `claude-haiku-4-5`) to produce a first result without waiting on manual labeling.
+> Read these as an LLM proxy, **not** human judgement: an LLM grading matchers shares
+> failure modes with the learned matchers and is exactly the kind of judge this study
+> was meant to check against a human. The LLM labels live in a separate file
+> (`metric_validity_labels_llm.jsonl`); a human pass writes `metric_validity_labels
+> .jsonl` and overrides.
 
 ## Method
 
@@ -61,6 +66,9 @@ up front so the numbers aren't over-read:
    So this can separate *gross* differences (kappa ≈ 0.2 vs ≈ 0.7) but **not** fine
    ones (e.g. overlap 0.55 vs 0.60). Read rankings as indicative; a definitive pick
    would need a few hundred labels, ideally ≥2 annotators + inter-annotator kappa.
+   *Observed below:* overlap [0.47, 0.88] and strict [0.33, 0.83] overlap heavily —
+   **overlap ≈ strict is not distinguishable at n=50**; only semantic (CI upper bound
+   0.55) is clearly separated below them.
 
 2. **The sample is oversampled on disagreement, on purpose.** So the kappa /
    precision / recall here characterize the **contested region** — the pairs where
@@ -71,42 +79,70 @@ up front so the numbers aren't over-read:
    that governs the recall gap between them — but it is not a population agreement
    rate, and shouldn't be quoted as one.
 
-## Results
+## Results (LLM-adjudicated proxy, judge = claude-haiku-4-5, n=50)
 
-<!-- Fill from: python -m sec_rag.eval.label_score  (after labeling) -->
+Source: `eval_results/metric_validity_scores_20260731T140147Z.json`. Judge said
+"supports" on **19 / 50** pairs (0.38 — on this disagreement-heavy sample). Ranked
+by agreement with the judge:
 
 | matcher | Cohen's κ | κ 95% CI | precision | recall | TP / FP / FN / TN |
 |---|---|---|---|---|---|
-| strict | _pending_ | | | | |
-| overlap | _pending_ | | | | |
-| semantic | _pending_ | | | | |
+| **overlap** (fuzzy 0.5) | **0.674** | [0.47, 0.88] | 0.74 | 0.89 | 17 / 6 / 2 / 25 |
+| strict (substring) | 0.579 | [0.33, 0.83] | **1.00** | 0.53 | 10 / 0 / 9 / 31 |
+| semantic (cos ≥ 0.62) | 0.300 | [0.05, 0.55] | **0.50** | 0.89 | 17 / 17 / 2 / 14 |
 
-**Best agreement with human judgement:** _pending labeling._
-**n labeled:** _pending._ **Human "supports" rate on the sample:** _pending._
+**Best agreement with the judge:** overlap (κ 0.674 — "substantial" on Landis–Koch).
+The error modes are clean and opposite:
+- **strict UNDER-counts** — precision 1.00 (every substring hit is a real support) but
+  recall 0.53 (it misses 9 of 19 real supports). A hard, trustworthy floor.
+- **semantic OVER-counts** — recall 0.89 but precision **0.50**: it fires on 34 pairs,
+  **half of which the judge says do NOT support the answer**. Its high recall@k is
+  inflated by false positives.
+- **overlap sits between**, closest to the judge, with a moderate false-positive rate
+  (precision 0.74 on contested pairs).
 
-## What this will imply about the committed recall numbers
+**A note on circularity:** if an LLM judge simply favored the most "AI-like" matcher,
+the embedding-based **semantic** matcher would score *highest*. It scored *lowest*
+(κ 0.30) — the judge penalizes its over-matching — which makes the ranking harder to
+dismiss as a judge/embedding artifact.
 
-Once labeled, the kappas convert the S3 *dependence* into a *validity* judgement:
+## What this implies about the committed recall numbers
 
-- If **overlap** has the highest kappa → the committed `recall@5 = 0.64` (and the
-  whole `eval_results/` history, all overlap/fuzzy) is the best-supported number, and
-  strict (0.093) / semantic (0.807) are the pessimistic / optimistic brackets.
-- If **semantic** wins → the committed numbers systematically *under*-count real hits,
-  and 0.64 is a floor, not the estimate.
-- If **strict** wins → nearly every committed recall number is inflated, and the true
-  hit rate is near 0.1.
-- Cross-check with the S3 ablation finding: the chunk-size win survives all matchers
-  (robust) but the embedding-model win is overlap-inflated (+0.127 overlap vs +0.053
-  semantic vs +0.000 strict). Whichever matcher wins here tells us which of *those*
-  deltas to believe.
+Under the LLM-adjudicated proxy, **overlap agrees best** — so the committed metric is
+the best-supported of the three, with these consequences (all subject to the LLM-proxy
+and n=50 caveats above):
 
-No matcher is declared "best" until the labels exist — picking one before measuring
-human agreement is exactly the mistake this study is built to avoid.
+- The committed **`recall@5 = 0.64`** (and the whole `eval_results/` history, all
+  overlap/fuzzy) is the closest-to-adjudicator number, with **strict 0.093 as a
+  pessimistic floor and semantic 0.807 as an optimistic ceiling**. The true rate is
+  *not* the midpoint — it sits near the overlap end.
+- overlap is a **slight over-estimate**: precision 0.74 on contested pairs means ~1 in
+  4 overlap "hits" isn't judged a real support, so true recall is likely a little
+  *below* 0.64 — but far above strict's 0.093, and clearly not as high as semantic's
+  0.807 (which is half false positives).
+- **Cross-check with the S3 ablations:** the chunk-size win survives all matchers
+  (robust); the embedding-model win was overlap-inflated (+0.127 overlap vs +0.053
+  semantic vs +0.000 strict). Since overlap is the best-adjudicated matcher, the
+  embedding win is *real but overstated* by the headline — the ~+0.05 semantic figure
+  is the more honest size, and by the high-precision strict matcher it's invisible at
+  recall@5.
+
+**Caveat that governs all of the above:** this is a Claude judge, not a human, on 50
+disagreement-heavy pairs. overlap ≈ strict is a statistical tie here (§ n=50); only
+semantic's over-matching is clearly established. A human pass (write
+`metric_validity_labels.jsonl`, re-run `label_score.py`) supersedes these numbers and
+is the honest way to *pick* a matcher — this proxy only narrows the field.
 
 ## Reproduce
 
 ```bash
 python -m sec_rag.eval.label_sample     # (already run; sample committed, seed 13)
+
+# Human path (gold standard; supersedes the LLM proxy):
 python -m sec_rag.eval.label_cli        # a human labels the 50 pairs (resumable)
-python -m sec_rag.eval.label_score      # kappa/precision/recall/confusion -> eval_results/
+python -m sec_rag.eval.label_score      # -> eval_results/metric_validity_scores_*.json
+
+# LLM-proxy path (what produced the results above):
+python -m sec_rag.eval.label_auto       # Claude judge -> metric_validity_labels_llm.jsonl
+python -m sec_rag.eval.label_score --labels eval_results/metric_validity_labels_llm.jsonl
 ```
