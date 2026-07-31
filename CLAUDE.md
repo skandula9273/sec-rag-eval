@@ -45,8 +45,8 @@ read the code and scrutinize the numbers. Treat every output that way.
   | MRR (fuzzy) | 0.317 | **0.492** | — |
   | tables@5 (fuzzy) | 0.32 | **0.70** | — |
   | faithfulness | 0.941 | **0.929** ✓ | 0.80 |
-  | cost / query | $0.0063 | **$0.009** (eval; API ~$0.005–6) | <$0.005 |
-  | p95 latency (e2e) | ~15.6 s | **~15.3 s** (eval w/ judge; API faster) | <2.5 s ✗ |
+  | cost / query | $0.0063 | **$0.009** eval · **$0.0045** live API (measured) | <$0.005 |
+  | p95 latency (e2e) | ~15.6 s | **15.3 s** eval · live API **p50 2.1 s / p95 6.2 s** (measured) | <2.5 s (p50 ✓, p95 ✗) |
 
   **Read recall as a bracket, not a point.** fuzzy(0.5) is a set token-overlap hit
   (generous — blind to number swaps like "grew 5%" vs "grew 25%"); substring
@@ -60,17 +60,24 @@ read the code and scrutinize the numbers. Treat every output that way.
   Full v2 baseline: `eval_results/financebench_20260629T193049Z.json` (150 q,
   full pipeline, 0 errors). Cost/latency above are EVAL numbers (top_k=10 + judge
   on); the **live API** runs top_k=5 + judge off (faithfulness opt-in), so it is
-  cheaper + faster. recall@5 0.44 → **0.64** and tables 0.32 → **0.70** came from
+  cheaper + faster — now **measured, not asserted**: 40 warm requests to the
+  deployed `/query`, server p50 **2.06 s** / p95 **6.19 s**, cost **$0.0045**/query,
+  streaming time-to-first-token **~1.0 s**; true cold start (Cloud Run scale-to-
+  zero) is ~19 s, observed once. Artifact:
+  `eval_results/api_latency_20260731T004411Z.json` (script:
+  `src/sec_rag/eval/measure_api_latency.py`). recall@5 0.44 → **0.64** and tables 0.32 → **0.70** came from
   ONE lever — the
   embedding model (3-large, Matryoshka-truncated to 1536-d so it fits `vector(1536)`
   and the free tier) + larger (1024) chunks. recall@10 0.747 is essentially at the
   0.75 target. Five other levers (hybrid, reranker ×2, table-extraction, smaller
   chunks) were measured and rejected — full ablation table in `docs/depth-round.md`.
 
-- **Remaining gaps:** (1) **latency** — p95 ~15.6 s vs <2.5 s, untouched; the free
-  engineering track (connection pool + faithfulness judge off the request path).
-  The "API faster/cheaper than eval" note above is asserted, **not yet measured**
-  with a committed run. (2) **faithfulness is self-graded** (Haiku judges Haiku).
+- **Remaining gaps:** (1) **latency** — now measured on the live API (server p50
+  **2.06 s**, p95 **6.19 s**; artifact `eval_results/api_latency_20260731T004411Z
+  .json`). The **p50 meets** the <2.5 s target; the **p95 (6.2 s) does not** — the
+  tail is generation-bound (long multi-claim answers), and the connection pool +
+  judge-off-path work is still open (the eval path is still ~15 s with the judge
+  on). Streaming TTFT ~1.0 s already gives a fast *perceived* response. (2) **faithfulness is self-graded** (Haiku judges Haiku).
   Now audited: a 20-q independent spot-check (Opus adjudicator) agrees with the
   judge **19/20 (95%)**, and the one miss is *harsh*, not lenient — so 0.929 is not
   inflated by a soft grader. But **correctness-vs-gold is still not directly
