@@ -228,7 +228,9 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
   multi-line tables. A 512-token chunk holds more of the span so it clears the 0.5
   bar more often; 256 splits the span across chunks (none clears it) AND doubles
   the distractors. So recall@k is partly **coupled to chunk size** — bigger chunks
-  inflate it. Real signal + a measurement artifact, both pushing the same way.
+  inflate it. Real signal + a measurement artifact, both pushing the same way. (This
+  early caveat was right; the confound crossing later *quantified* it — ~half the
+  512->1024 overlap recall gain is this inflation. See "Crossing the confound" below.)
 - **Decision:** 256 rejected; 512 stays. The lever points toward LARGER chunks,
   but that trades against citation precision + generation cost and partly games the
   overlap metric — not a clean win. Next real lever: the embedding MODEL
@@ -250,6 +252,13 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
   representation*; the model swap delivered. The depth-round arc: a methodical
   elimination, not a lucky guess — "I changed one variable at a time against a
   committed baseline until the data pointed at the embedding, then proved it."
+- **Confirmed by the confound crossing (below), with a magnitude caveat:** embedding IS
+  the real driver — chunk-invariant answer accuracy rises **+0.08** across 3-small->3-large
+  and refusals fall 0.51->0.39. But the +0.13 recall is the OVERLAP/fuzzy number and is
+  matcher-dependent: **+0.05 under semantic, +0.00 under exact-substring at recall@5**.
+  3-large pulls chunks with more token/meaning overlap, not more *exact* gold spans. So
+  "THE lever" holds (it's the one real system win), but its headline *size* is a property
+  of the fuzzy metric as much as the retriever.
 - **The catch (productionizing):** adopting 3-large needs `vector(3072)` in Neon =
   ~2x per-vector storage. The 3-small corpus already uses 468/512 MB, so a 3-large
   corpus (~700 MB+) does NOT fit the free tier -- adoption requires a Neon paid
@@ -262,11 +271,18 @@ ablation (3-small vs 3-large vs Voyage finance-2 vs BGE).
 - **Result (2026-06-27, local exact, all 3-large):** recall@5 512=0.573, 768=0.60,
   **1024=0.64**; recall@10 up to **0.767**; tables 0.62 -> 0.64 -> **0.72**; domain
   0.44 -> **0.54**. Monotonic with chunk size.
-- **Real, not just metric inflation — the prose control proves it:** the worry was
-  that fuzzy >=0.5 overlap rewards bigger chunks (they hold more of the large gold
-  spans). But **prose stays flat** (0.66/0.64/0.66) — prose spans are small, so a
-  pure artifact would lift prose too. It doesn't. The gains land exactly on the
-  table-heavy categories: genuine retrieval improvement + some metric coupling.
+- **Real, not just metric inflation — the prose control (partly) shows it:** the worry
+  was that fuzzy >=0.5 overlap rewards bigger chunks (they hold more of the large gold
+  spans). Prose stays flat (0.66/0.64/0.66) — prose spans are small, so a *pure* artifact
+  would lift prose too; it doesn't. So the gain isn't pure inflation. But the prose
+  control only rules out "all inflation" — it doesn't size the coupling.
+- **CORRECTED by the confound crossing** (`confound_study_20260731T170928Z.json`, see
+  the section below): crossing chunk size against all three matchers + chunk-invariant
+  answer accuracy quantified the split. Of the +0.080 overlap chunk-gain, only **~+0.037
+  is real** (survives strict/semantic; accuracy rises a matching +0.033) and **~+0.043 is
+  overlap-metric inflation.** So "some metric coupling" undersold it — the inflation is
+  ~half the chunk gain, not a footnote. This section's original "genuine retrieval
+  improvement" claim stands but was over-confident about the size.
 - **Tradeoffs (1024 isn't a free win):** coarser citations (~2x larger source,
   worse for verify-the-line financial QA), more generation tokens/latency, some
   recall@k inflation. **Side benefit:** fewer chunks (15k vs 26k) ~= half the
