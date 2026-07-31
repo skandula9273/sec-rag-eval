@@ -41,3 +41,6 @@ uv.lock
 # Aborted/smoke eval runs left locally — only COMPLETE runs are committed.
 eval_results/financebench_20260606T205418Z.json
 eval_results/financebench_20260606T222705Z.json
+
+# CI smoke-eval runtime artifact (regenerated each run)
+ci_eval_comment.md

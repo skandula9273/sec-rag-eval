@@ -1,0 +1,19 @@
+# CI smoke-eval gate. The subset, baseline, matcher, and threshold live HERE (not in
+# the workflow YAML) so a change to the gate is a reviewable diff in one place.
+#
+# This is a SMOKE TEST, not the benchmark: 30 questions, retrieval-only, one matcher.
+# See the README "eval-as-CI" section for what it does and does NOT catch.
+
+subset_file: eval_results/ci_subset.jsonl   # fixed 30 q (seed 13, 10/category), committed
+retrieval_config: configs/v2.yaml           # the production retrieval config under test
+matcher: overlap        # the S4 human-validated matcher (Cohen's kappa 0.67 vs labels;
+                        # docs/metric-validity.md). NOT strict/semantic — overlap agreed best.
+metric: recall@5
+top_k: 10
+max_questions: 30       # cost ceiling: CI never evaluates more than this many questions
+
+baseline_recall@5: 0.6333   # committed baseline on this subset under `matcher`
+                            # (regenerate with: python -m sec_rag.eval.ci_eval --update-baseline)
+max_drop: 0.10          # FAIL the PR check if recall@5 falls MORE than this below baseline.
+                        # 0.10 ~= 3 questions on a 30-q subset (each is 1/30 = 0.033), which
+                        # tolerates subset noise while still catching a real regression.

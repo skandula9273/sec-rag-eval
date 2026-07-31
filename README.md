@@ -178,6 +178,35 @@ Run the API + frontend locally: `SEC_RAG_CONFIG=configs/v2.yaml uvicorn
 sec_rag.api.app:app --port 8000`, then serve `web/` (`python -m http.server 8080`
 in `web/`) — it auto-points at the local API. Cloud Run deploy: [`DEPLOY.md`](DEPLOY.md).
 
+## eval-as-CI
+
+Every PR runs a **retrieval-only smoke eval** ([`.github/workflows/eval-ci.yml`](.github/workflows/eval-ci.yml)):
+it retrieves for a **committed 30-question subset** (seed 13, 10 per category —
+[`eval_results/ci_subset.jsonl`](eval_results/ci_subset.jsonl)) and scores **recall@5
+under the `overlap` matcher — the one that agreed best with human/LLM labels in the
+metric-validity study** (Cohen's κ 0.67; [`docs/metric-validity.md`](docs/metric-validity.md)).
+The check **fails if recall@5 drops more than `max_drop` (0.10) below the committed
+baseline (0.6333)** — and it posts a delta table as a PR comment. The gate parameters
+(subset, baseline, matcher, threshold) live in [`configs/ci_eval.yaml`](configs/ci_eval.yaml),
+not the workflow YAML, so tightening the gate is a reviewable one-line diff. Local
+dry-run: `python -m sec_rag.eval.ci_eval` (or `--update-baseline` after an intended change).
+
+**Operational choices:** it's retrieval-only, so **no Anthropic call and ~$0.001/run**
+(≈30 small OpenAI query embeddings); `OPENAI_API_KEY` + `DATABASE_URL` come from repo
+secrets; it **skips gracefully with a clear message when secrets are absent** (fork PRs
+/ Dependabot don't fail confusingly); and a `max_questions` cost ceiling + a 15-min job
+timeout bound every run.
+
+**What it does NOT catch — this is a smoke test, not the benchmark.** 30 questions means
+each one is ±0.033 recall@5, so the gate is coarse (0.10 ≈ 3 questions) — it flags a
+real retrieval regression, but not small shifts, and a lucky/unlucky subset can move it.
+It measures **retrieval recall only**: no answer accuracy, no faithfulness, no latency/cost,
+and only the one validated matcher. The **full n=150 benchmark** (recall + faithfulness +
+cost through generation) is deliberately **not** run per-PR — that's minutes of wall time
+and real Anthropic spend on every push — so it stays a manual / release-time step
+(`make eval CONFIG=configs/v2.yaml --accuracy`). The tradeoff: fast, free, catches the
+obvious breakage on every PR; you still run the real benchmark before a release.
+
 ## Notes
 
 - **Reproducible:** fixed seed (13), temp 0, pinned `requirements.lock`, eval JSON
