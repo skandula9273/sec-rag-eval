@@ -539,6 +539,26 @@ to a committed JSON.
   a miss. Observability only (still indexes what it got); pure helper, unit-tested;
   verified on live AAPL HTML (full → ok, a 5 % slice → warned).
 
+### Crossing the confound — how much of V0->V2 is real vs metric inflation
+- The V0->V2 headline moved TWO variables (3-small->3-large AND 512->1024), so it was
+  never decomposed and the 3-small@1024 cell was never run. Ran the **full grid**:
+  {3-small,3-large} × {512,1024,2048} × {strict,overlap,semantic}, retrieval-only, plus
+  answer accuracy (the chunk-invariant tiebreak) at three cells.
+  `eval_results/confound_study_20260731T170928Z.json` (+ `confound_grid_*.json`).
+- **The two effects are additive (interaction ≈ 0).** Decomposing the +0.207 overlap
+  recall@5 gain: embedding **+0.127** + chunk **+0.080**. Of the chunk +0.080, only
+  **~+0.037 is real** (survives strict/semantic; accuracy chunk-effect +0.033); the
+  other **~+0.043 is overlap-metric inflation** (bigger chunk -> easier 50%-token bar).
+- **Accuracy is the arbiter** (can't be inflated by chunk size): over-all answer
+  accuracy climbs V0->V2 **0.36 -> 0.47 (+0.11)**, split embedding +0.08 / chunk +0.033;
+  refusals fall 0.51 -> 0.37. So **~80% of the headline is real, ~20% is chunk inflation**,
+  and the embedding model is the real driver — not the chunk change. Corrects the earlier
+  "roughly a third is chunk-size" line, which counted the inflated recall, not the real gain.
+- **Chunk benefit saturates by 1024:** 2048 is flat/negative under overlap+semantic (only
+  strict keeps rising — the "big chunk swallows the multi-line span" artifact). 1024 was
+  the right stopping point. (One caveat: the V2 accuracy cell reuses the S2 Neon run — the
+  local V2 accuracy arm hit an Anthropic credit-out at 66/150; same corpus/top_k/prompt.)
+
 ### Net after this round
 - Every headline number now traces to a committed artifact. The three latency levers
   (pool, judge-off-path, concision) are shipped; live p50 meets <2.5 s and streaming

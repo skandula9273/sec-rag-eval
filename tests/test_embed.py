@@ -35,6 +35,7 @@ def _quota_error():
 def _embedder():
     e = Embedder.__new__(Embedder)  # bypass __init__ (no real OpenAI client / key)
     e.model, e.dim, e.batch_size = "m", 3, 2
+    e.throttle_s = 0.0
     return e
 
 

@@ -69,13 +69,25 @@ a 1024-token chunk clears the 50% bar more easily than a 512, so part of the
 chunk-size gain is metric, not retrieval.
 
 The V0→V2 jump moved **two** variables — the embedding model (3-small → 3-large@1536)
-*and* chunk size (512 → 1024). The ablations isolate them: at a fixed 512-token
-chunk the model change is **+0.133** (0.44 → 0.573), and over 3-large the chunk
-change is **+0.067** (0.573 → 0.64) — so the embedding is the larger lever (~2/3 of
-the +0.20 headline), but **roughly a third is the chunk-size change**. The 2×2 is
-**not fully crossed — 3-small @ 1024 was never run**, so the model×chunk interaction
-is unmeasured. Five other levers (hybrid, reranker ×2, table-extraction, smaller
-chunks) were measured and rejected. The full table and the reasoning are in
+*and* chunk size (512 → 1024). The **full grid is now crossed** (2 models × 3 chunk
+sizes × 3 matchers, retrieval-only; `eval_results/confound_study_20260731T170928Z.json`),
+which fills the 3-small@1024 cell that had never been run and shows the two effects
+are **additive (interaction ≈ 0)**. Decomposing the **+0.207** overlap recall@5 gain:
+
+- **embedding +0.127** (61%) — *real*: answer accuracy rises +0.08 and refusals fall
+  0.51→0.39 across the same change.
+- **chunk-size +0.080** (39%), but only **~+0.037 is real** (it survives the strict and
+  semantic matchers, and accuracy rises a matching +0.033); the other **~+0.043 is
+  overlap-metric inflation** — a bigger chunk clears the 50%-token bar more easily,
+  independent of retrieval quality.
+
+So **~80% of the headline is real system improvement** (embedding + a modest real chunk
+gain) and **~20% is chunk-size metric inflation.** The arbiter is answer accuracy —
+which *cannot* be inflated by chunk size — and it climbs V0→V2 by **+0.11 (0.36→0.47)**,
+almost all from the embedding model. (Chunk benefit also saturates by 1024: 2048 is flat
+or negative under overlap/semantic.) Five other levers (hybrid, reranker ×2,
+table-extraction, smaller chunks) were measured and rejected. The full table and the
+reasoning are in
 [`docs/depth-round.md`](docs/depth-round.md); a version-by-version summary is in
 [`docs/versions.md`](docs/versions.md) and the decisions/steps narrative in
 [`docs/decisions-and-steps.md`](docs/decisions-and-steps.md).

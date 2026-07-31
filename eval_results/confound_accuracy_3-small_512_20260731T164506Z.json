@@ -1,0 +1,80 @@
+{
+  "timestamp": "2026-07-31T16:45:06.364193+00:00",
+  "mode": "confound_accuracy_arm",
+  "arm": "3-small/512",
+  "top_k": 10,
+  "judge_model": "claude-haiku-4-5",
+  "n_scored": 150,
+  "n_errors": 0,
+  "errors": [],
+  "overall": {
+    "n": 150,
+    "n_refused": 77,
+    "refusal_rate": 0.5133,
+    "n_answered": 73,
+    "llm": {
+      "n_graded": 73,
+      "n_correct": 54,
+      "accuracy": 0.7397,
+      "accuracy_over_all": 0.36
+    },
+    "numeric": {
+      "n_applicable": 36,
+      "n_correct": 31,
+      "accuracy": 0.8611
+    }
+  },
+  "per_category": {
+    "domain-relevant": {
+      "n": 50,
+      "n_refused": 25,
+      "refusal_rate": 0.5,
+      "n_answered": 25,
+      "llm": {
+        "n_graded": 25,
+        "n_correct": 15,
+        "accuracy": 0.6,
+        "accuracy_over_all": 0.3
+      },
+      "numeric": {
+        "n_applicable": 5,
+        "n_correct": 2,
+        "accuracy": 0.4
+      }
+    },
+    "metrics-generated": {
+      "n": 50,
+      "n_refused": 27,
+      "refusal_rate": 0.54,
+      "n_answered": 23,
+      "llm": {
+        "n_graded": 23,
+        "n_correct": 19,
+        "accuracy": 0.8261,
+        "accuracy_over_all": 0.38
+      },
+      "numeric": {
+        "n_applicable": 23,
+        "n_correct": 22,
+        "accuracy": 0.9565
+      }
+    },
+    "novel-generated": {
+      "n": 50,
+      "n_refused": 25,
+      "refusal_rate": 0.5,
+      "n_answered": 25,
+      "llm": {
+        "n_graded": 25,
+        "n_correct": 20,
+        "accuracy": 0.8,
+        "accuracy_over_all": 0.4
+      },
+      "numeric": {
+        "n_applicable": 8,
+        "n_correct": 7,
+        "accuracy": 0.875
+      }
+    }
+  }
+}

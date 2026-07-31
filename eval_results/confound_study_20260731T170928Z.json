@@ -1,0 +1,109 @@
+{
+  "mode": "confound_study",
+  "note": "Crosses embedding-model x chunk-size x matcher; accuracy is the chunk-invariant tiebreak.",
+  "inputs": {
+    "recall_grid": "confound_grid_20260731T162218Z.json",
+    "accuracy_V0": "confound_accuracy_3-small_512_20260731T164506Z.json",
+    "accuracy_3large512": "confound_accuracy_3-large_512_20260731T165458Z.json",
+    "accuracy_V2": "financebench_20260731T111452Z.json (S2)"
+  },
+  "recall@5_grid": {
+    "3-small/512": {
+      "strict": 0.0667,
+      "overlap": 0.44,
+      "semantic": 0.7133
+    },
+    "3-small/1024": {
+      "strict": 0.0933,
+      "overlap": 0.52,
+      "semantic": 0.7533
+    },
+    "3-small/2048": {
+      "strict": 0.1267,
+      "overlap": 0.5267,
+      "semantic": 0.7267
+    },
+    "3-large/512": {
+      "strict": 0.0667,
+      "overlap": 0.5667,
+      "semantic": 0.7667
+    },
+    "3-large/1024": {
+      "strict": 0.0933,
+      "overlap": 0.6467,
+      "semantic": 0.8133
+    },
+    "3-large/2048": {
+      "strict": 0.1067,
+      "overlap": 0.6333,
+      "semantic": 0.8133
+    }
+  },
+  "recall@5_effects": {
+    "strict": {
+      "embedding": 0.0,
+      "chunk_512to1024": 0.0266,
+      "v0_to_v2": 0.0266
+    },
+    "overlap": {
+      "embedding": 0.1267,
+      "chunk_512to1024": 0.08,
+      "v0_to_v2": 0.2067
+    },
+    "semantic": {
+      "embedding": 0.0534,
+      "chunk_512to1024": 0.0466,
+      "v0_to_v2": 0.1
+    }
+  },
+  "accuracy_over_all": {
+    "3-small/512": 0.36,
+    "3-large/512": 0.44,
+    "3-large/1024": 0.4733
+  },
+  "refusal_rate": {
+    "3-small/512": 0.5133,
+    "3-large/512": 0.3933,
+    "3-large/1024": 0.3733
+  },
+  "accuracy_effects": {
+    "embedding_@512": 0.08,
+    "chunk_512to1024_@3large": 0.0333,
+    "v0_to_v2_total": 0.1133
+  },
+  "accuracy_detail": {
+    "3-small/512": {
+      "llm_over_all": 0.36,
+      "llm_attempted": 0.7397,
+      "refusal_rate": 0.5133,
+      "numeric": 0.8611,
+      "n_scored": 150,
+      "source": "local"
+    },
+    "3-large/512": {
+      "llm_over_all": 0.44,
+      "llm_attempted": 0.7253,
+      "refusal_rate": 0.3933,
+      "numeric": 0.8776,
+      "n_scored": 150,
+      "source": "local"
+    },
+    "3-large/1024": {
+      "llm_over_all": 0.4733,
+      "llm_attempted": 0.7553,
+      "refusal_rate": 0.3733,
+      "numeric": 0.8333,
+      "n_scored": 150,
+      "source": "S2 Neon pipeline (local V2 arm hit credit depletion; same corpus/top_k/prompt)"
+    }
+  },
+  "attribution_v0_to_v2_recall@5": {
+    "overlap_headline_gain": 0.2067,
+    "embedding_component": 0.1267,
+    "chunk_component_overlap": 0.08,
+    "chunk_component_real_est": 0.0366,
+    "chunk_metric_inflation_est": 0.0434,
+    "interaction": 0.0
+  },
+  "conclusion": "V0->V2 overlap recall@5 +0.207 = embedding +0.127 + chunk +0.080 (additive, interaction +0.000). Of the chunk +0.080, ~+0.037 is real (survives strict/semantic; accuracy chunk-effect +0.033) and ~+0.043 is overlap metric inflation. Accuracy (chunk-invariant) rises V0->V2 +0.113 = embedding +0.080 + chunk +0.033: embedding is the real driver; the chunk change is a small real gain that the overlap recall ~doubles."
+}

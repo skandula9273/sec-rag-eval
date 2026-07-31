@@ -21,7 +21,8 @@ _MAX_RETRIES = 6
 
 
 class Embedder:
-    def __init__(self, cfg: EmbeddingConfig, secrets: Secrets | None = None):
+    def __init__(self, cfg: EmbeddingConfig, secrets: Secrets | None = None,
+                 throttle_s: float = 0.0):
         if cfg.provider != "openai":
             raise NotImplementedError(f"V0 embeds via OpenAI, got provider={cfg.provider!r}")
         secrets = secrets or Secrets()
@@ -32,6 +33,11 @@ class Embedder:
         self.model = cfg.model
         self.dim = cfg.dim
         self.batch_size = cfg.batch_size
+        # Optional proactive pace between batches. The reactive backoff in _create only
+        # slows down AFTER a 429; on a model with a tight TPM ceiling (3-large) that
+        # thrash is slow and can stall. A small inter-batch sleep keeps a big corpus
+        # embed under the ceiling instead. 0 = off (the default; query embeds, ingest).
+        self.throttle_s = throttle_s
 
     def _create(self, batch: list[str]):
         """One embeddings call with bounded backoff on transient errors.
@@ -67,6 +73,8 @@ class Embedder:
             return []
         vectors: list[list[float]] = []
         for i in range(0, len(texts), self.batch_size):
+            if self.throttle_s and i > 0:
+                time.sleep(self.throttle_s)  # pace to stay under a tight TPM ceiling
             batch = texts[i : i + self.batch_size]
             resp = self._create(batch)
             ordered = sorted(resp.data, key=lambda d: d.index)
