@@ -41,6 +41,34 @@ def _normalize(mat: np.ndarray) -> np.ndarray:
     return mat / n
 
 
+def _lever_verdict(name: str, survivors: list[str], all_matchers: list[str]) -> str:
+    if set(survivors) == set(all_matchers):
+        return f"the {name} win survives ALL matchers -> robust, not a metric artifact"
+    if survivors == ["overlap"]:
+        return f"the {name} win is OVERLAP-ONLY -> largely an artifact of the lenient metric"
+    if not survivors:
+        return f"the {name} win survives NO matcher (>= +{_SURVIVE_EPS} recall@5) -> not real"
+    return f"the {name} win is MATCHER-DEPENDENT -> survives only {survivors}"
+
+
+def _summarize(levers: dict, all_matchers: list[str]) -> str:
+    """One-line verdict on BOTH levers from the per-matcher deltas (derived, not a
+    new measurement — safe to recompute over an existing artifact)."""
+    def deltas(key: str) -> str:
+        return ", ".join(f"{m} {levers[m][key]:+.3f}" for m in all_matchers)
+
+    emb_surv = [m for m in all_matchers if levers[m]["embedding_survives"]]
+    chk_surv = [m for m in all_matchers if levers[m]["chunk_survives"]]
+    return (
+        f"Embedding-model lever (3-small->3-large @512), recall@5 delta by matcher: "
+        f"{deltas('embedding_lever_recall@5_delta')}; "
+        f"{_lever_verdict('embedding-model', emb_surv, all_matchers)}. || "
+        f"Chunk-size lever (512->1024 @3-large), recall@5 delta by matcher: "
+        f"{deltas('chunk_lever_recall@5_delta')}; "
+        f"{_lever_verdict('chunk-size', chk_surv, all_matchers)}."
+    )
+
+
 def _corpus_contents(questions, enc, max_tokens: int, strategy: str) -> list[str]:
     """Re-chunk the FinanceBench docs the questions reference, at ``max_tokens``."""
     contents: list[str] = []
@@ -135,29 +163,7 @@ def run_ablations(matchers_path: str) -> dict:
             "chunk_survives": chunk >= _SURVIVE_EPS,
         }
 
-    def _deltas(key: str) -> str:
-        return ", ".join(f"{m} {levers[m][key]:+.3f}" for m in matchers)
-
-    emb_all = all(levers[m]["embedding_survives"] for m in matchers)
-    chunk_matchers = [m for m in matchers if levers[m]["chunk_survives"]]
-    if chunk_matchers == ["overlap"]:
-        verdict = ("The chunk-size win is OVERLAP-ONLY -> largely a metric artifact (a "
-                   "bigger chunk clears the 50%-token bar more easily), not a real "
-                   "retrieval gain.")
-    elif len(chunk_matchers) > 1:
-        verdict = ("The chunk-size win holds under more than the lenient matcher -> "
-                   "real, not just metric.")
-    elif not chunk_matchers:
-        verdict = "The chunk-size win survives NO matcher (>= +0.02 recall@5) -> not a real gain."
-    else:
-        verdict = f"The chunk-size win survives only under: {chunk_matchers}."
-    summary = (
-        f"Embedding lever (3-small->3-large @512), recall@5 delta by matcher: "
-        f"{_deltas('embedding_lever_recall@5_delta')}; survives all = {emb_all}. || "
-        f"Chunk lever (512->1024 @3-large), recall@5 delta by matcher: "
-        f"{_deltas('chunk_lever_recall@5_delta')}; survives under "
-        f"{chunk_matchers or 'no'} matcher(s). {verdict}"
-    )
+    summary = _summarize(levers, list(matchers))
 
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),

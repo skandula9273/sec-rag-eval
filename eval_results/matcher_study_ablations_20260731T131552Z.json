@@ -1,0 +1,247 @@
+{
+  "timestamp": "2026-07-31T13:15:51.539969+00:00",
+  "mode": "matcher_study_ablations",
+  "index": "local exact cosine; 3-large/1024 arm = live Neon v2 embeddings",
+  "n_questions": 150,
+  "n_chunks": {
+    "512": 25988,
+    "1024": 15192
+  },
+  "top_k_retrieved": 10,
+  "matcher_specs": {
+    "strict": {
+      "type": "strict"
+    },
+    "overlap": {
+      "type": "overlap",
+      "threshold": 0.5
+    },
+    "semantic": {
+      "type": "semantic",
+      "threshold": 0.62,
+      "embedding": {
+        "provider": "openai",
+        "model": "text-embedding-3-small",
+        "dim": 1536
+      }
+    }
+  },
+  "arms_scored": {
+    "3-small/512": {
+      "strict": {
+        "recall_at_k": {
+          "recall@5": 0.0667,
+          "recall@10": 0.1067
+        },
+        "mrr": 0.0456,
+        "per_category_recall": {
+          "domain-relevant": {
+            "recall@5": 0.08,
+            "recall@10": 0.14
+          },
+          "metrics-generated": {
+            "recall@5": 0.0,
+            "recall@10": 0.0
+          },
+          "novel-generated": {
+            "recall@5": 0.12,
+            "recall@10": 0.18
+          }
+        }
+      },
+      "overlap": {
+        "recall_at_k": {
+          "recall@5": 0.44,
+          "recall@10": 0.54
+        },
+        "mrr": 0.3169,
+        "per_category_recall": {
+          "domain-relevant": {
+            "recall@5": 0.34,
+            "recall@10": 0.42
+          },
+          "metrics-generated": {
+            "recall@5": 0.32,
+            "recall@10": 0.44
+          },
+          "novel-generated": {
+            "recall@5": 0.66,
+            "recall@10": 0.76
+          }
+        }
+      },
+      "semantic": {
+        "recall_at_k": {
+          "recall@5": 0.7133,
+          "recall@10": 0.8267
+        },
+        "mrr": 0.4939,
+        "per_category_recall": {
+          "domain-relevant": {
+            "recall@5": 0.6,
+            "recall@10": 0.68
+          },
+          "metrics-generated": {
+            "recall@5": 0.8,
+            "recall@10": 0.94
+          },
+          "novel-generated": {
+            "recall@5": 0.74,
+            "recall@10": 0.86
+          }
+        }
+      }
+    },
+    "3-large/512": {
+      "strict": {
+        "recall_at_k": {
+          "recall@5": 0.0667,
+          "recall@10": 0.1133
+        },
+        "mrr": 0.0436,
+        "per_category_recall": {
+          "domain-relevant": {
+            "recall@5": 0.12,
+            "recall@10": 0.2
+          },
+          "metrics-generated": {
+            "recall@5": 0.0,
+            "recall@10": 0.0
+          },
+          "novel-generated": {
+            "recall@5": 0.08,
+            "recall@10": 0.14
+          }
+        }
+      },
+      "overlap": {
+        "recall_at_k": {
+          "recall@5": 0.5667,
+          "recall@10": 0.6667
+        },
+        "mrr": 0.3825,
+        "per_category_recall": {
+          "domain-relevant": {
+            "recall@5": 0.44,
+            "recall@10": 0.54
+          },
+          "metrics-generated": {
+            "recall@5": 0.6,
+            "recall@10": 0.68
+          },
+          "novel-generated": {
+            "recall@5": 0.66,
+            "recall@10": 0.78
+          }
+        }
+      },
+      "semantic": {
+        "recall_at_k": {
+          "recall@5": 0.7667,
+          "recall@10": 0.8333
+        },
+        "mrr": 0.5624,
+        "per_category_recall": {
+          "domain-relevant": {
+            "recall@5": 0.7,
+            "recall@10": 0.8
+          },
+          "metrics-generated": {
+            "recall@5": 0.86,
+            "recall@10": 0.88
+          },
+          "novel-generated": {
+            "recall@5": 0.74,
+            "recall@10": 0.82
+          }
+        }
+      }
+    },
+    "3-large/1024": {
+      "strict": {
+        "recall_at_k": {
+          "recall@5": 0.0933,
+          "recall@10": 0.1267
+        },
+        "mrr": 0.0604,
+        "per_category_recall": {
+          "domain-relevant": {
+            "recall@5": 0.12,
+            "recall@10": 0.2
+          },
+          "metrics-generated": {
+            "recall@5": 0.04,
+            "recall@10": 0.04
+          },
+          "novel-generated": {
+            "recall@5": 0.12,
+            "recall@10": 0.14
+          }
+        }
+      },
+      "overlap": {
+        "recall_at_k": {
+          "recall@5": 0.6467,
+          "recall@10": 0.7467
+        },
+        "mrr": 0.4933,
+        "per_category_recall": {
+          "domain-relevant": {
+            "recall@5": 0.56,
+            "recall@10": 0.66
+          },
+          "metrics-generated": {
+            "recall@5": 0.72,
+            "recall@10": 0.8
+          },
+          "novel-generated": {
+            "recall@5": 0.66,
+            "recall@10": 0.78
+          }
+        }
+      },
+      "semantic": {
+        "recall_at_k": {
+          "recall@5": 0.8133,
+          "recall@10": 0.88
+        },
+        "mrr": 0.6094,
+        "per_category_recall": {
+          "domain-relevant": {
+            "recall@5": 0.82,
+            "recall@10": 0.9
+          },
+          "metrics-generated": {
+            "recall@5": 0.84,
+            "recall@10": 0.92
+          },
+          "novel-generated": {
+            "recall@5": 0.78,
+            "recall@10": 0.82
+          }
+        }
+      }
+    }
+  },
+  "levers_recall@5": {
+    "strict": {
+      "embedding_lever_recall@5_delta": 0.0,
+      "chunk_lever_recall@5_delta": 0.0266,
+      "embedding_survives": false,
+      "chunk_survives": true
+    },
+    "overlap": {
+      "embedding_lever_recall@5_delta": 0.1267,
+      "chunk_lever_recall@5_delta": 0.08,
+      "embedding_survives": true,
+      "chunk_survives": true
+    },
+    "semantic": {
+      "embedding_lever_recall@5_delta": 0.0534,
+      "chunk_lever_recall@5_delta": 0.0466,
+      "embedding_survives": true,
+      "chunk_survives": true
+    }
+  },
+  "summary": "Embedding-model lever (3-small->3-large @512), recall@5 delta by matcher: strict +0.000, overlap +0.127, semantic +0.053; the embedding-model win is MATCHER-DEPENDENT -> survives only ['overlap', 'semantic']. || Chunk-size lever (512->1024 @3-large), recall@5 delta by matcher: strict +0.027, overlap +0.080, semantic +0.047; the chunk-size win survives ALL matchers -> robust, not a metric artifact."
+}
