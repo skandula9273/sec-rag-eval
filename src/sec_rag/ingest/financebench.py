@@ -29,7 +29,9 @@ class Question:
     question_type: str | None = None
 
 
-# Candidate column names per logical field (first present wins).
+# Candidate column names per logical field (first present wins). The dataset
+# card is the source of truth; these aliases absorb the minor naming drift seen
+# across FinanceBench mirrors without silently guessing at a field.
 _FIELD_CANDIDATES = {
     "id": ["financebench_id", "id"],
     "question": ["question"],
@@ -38,40 +40,89 @@ _FIELD_CANDIDATES = {
     "question_type": ["question_type", "category"],
 }
 
+# Fields whose absence is unrecoverable: a row without them cannot be scored, so
+# we fail loud rather than emit a half-populated Question. ``id`` is optional (it
+# falls back to a positional index) and so is ``question_type``.
+_REQUIRED_FIELDS = frozenset({"question", "answer", "doc_name"})
 
-def _first_present(row: dict, candidates: list[str]) -> str | None:
-    for name in candidates:
-        if name in row and row[name] is not None:
-            return name
+# Evidence sub-keys, in priority order. Pages resolve by "first key PRESENT"
+# (not first truthy): FinanceBench's evidence_page_num is 0-based, so page 0 (a
+# cover page) is a real value an ``or`` chain would silently drop.
+_EVIDENCE_TEXT_KEYS = ("evidence_text", "text")
+_PAGE_KEYS = ("evidence_page_num", "page_number", "page")
+
+
+def _first_present(item: dict, keys: tuple[str, ...]):
+    """Value of the first key that is present (not None); ``None`` if none are.
+
+    Presence, not truthiness — so a 0-based page number (0) survives where an
+    ``a or b`` chain would fall through it.
+    """
+    for key in keys:
+        if item.get(key) is not None:
+            return item[key]
     return None
+
+
+def _resolve_field(row: dict, logical: str) -> str | None:
+    """Value of the first present candidate column for ``logical`` (``None`` if none).
+
+    Raises ValueError for a missing *required* field, printing the columns
+    actually present, so a dataset schema change surfaces loudly instead of
+    quietly mislabeling data.
+    """
+    value = _first_present(row, tuple(_FIELD_CANDIDATES[logical]))
+    if value is None and logical in _REQUIRED_FIELDS:
+        raise ValueError(
+            f"FinanceBench row missing required field '{logical}'. "
+            f"Columns present: {sorted(row.keys())}. "
+            "Update _FIELD_CANDIDATES to match the dataset card."
+        )
+    return value
 
 
 def _extract_evidence(row: dict) -> tuple[list[str], list[int]]:
     """Pull evidence text + page numbers from the (nested) evidence field."""
     ev = row.get("evidence") or row.get("evidence_text") or []
+    if isinstance(ev, str):
+        return [ev], []
+
     texts: list[str] = []
     pages: list[int] = []
-    if isinstance(ev, str):
-        texts.append(ev)
-    else:
-        for item in ev:
-            if isinstance(item, dict):
-                txt = item.get("evidence_text") or item.get("text")
-                if txt:
-                    texts.append(txt)
-                # Pick the first key that is PRESENT (not the first truthy one):
-                # FinanceBench evidence_page_num is 0-based, so page 0 (a cover
-                # page) is a real value an ``or`` chain would silently drop.
-                pg = None
-                for key in ("evidence_page_num", "page_number", "page"):
-                    if item.get(key) is not None:
-                        pg = item[key]
-                        break
-                if isinstance(pg, int):
-                    pages.append(pg)
-            elif isinstance(item, str):
-                texts.append(item)
+    for item in ev:
+        if isinstance(item, str):
+            texts.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        # Text: first non-empty wins (truthy is right — an empty span is noise).
+        txt = item.get("evidence_text") or item.get("text")
+        if txt:
+            texts.append(txt)
+        pg = _first_present(item, _PAGE_KEYS)
+        if isinstance(pg, int):
+            pages.append(pg)
     return texts, pages
+
+
+def _normalize_row(row: dict, fallback_id: str) -> Question:
+    """Normalize one raw FinanceBench row into a ``Question``.
+
+    Pure (no I/O): dict in, Question out. Kept separate from ``load_questions``
+    so the normalization logic is unit-testable without pulling the dataset over
+    the network.
+    """
+    raw_id = _resolve_field(row, "id")
+    texts, pages = _extract_evidence(row)
+    return Question(
+        id=str(raw_id) if raw_id is not None else fallback_id,
+        question=_resolve_field(row, "question"),
+        answer=_resolve_field(row, "answer"),
+        doc_name=_resolve_field(row, "doc_name"),
+        evidence_texts=texts,
+        pages=pages,
+        question_type=_resolve_field(row, "question_type"),
+    )
 
 
 def load_questions(dataset_name: str = "PatronusAI/financebench") -> list[Question]:
@@ -83,32 +134,7 @@ def load_questions(dataset_name: str = "PatronusAI/financebench") -> list[Questi
     split = next(iter(ds.keys()))
     rows = ds[split]
 
-    out: list[Question] = []
-    for row in rows:
-        resolved = {}
-        for logical, candidates in _FIELD_CANDIDATES.items():
-            key = _first_present(row, candidates)
-            if key is None and logical in ("question", "answer", "doc_name"):
-                raise ValueError(
-                    f"FinanceBench row missing required field '{logical}'. "
-                    f"Columns present: {sorted(row.keys())}. "
-                    "Update _FIELD_CANDIDATES to match the dataset card."
-                )
-            resolved[logical] = row[key] if key else None
-
-        texts, pages = _extract_evidence(row)
-        out.append(
-            Question(
-                id=str(resolved["id"]) if resolved["id"] is not None else str(len(out)),
-                question=resolved["question"],
-                answer=resolved["answer"],
-                doc_name=resolved["doc_name"],
-                evidence_texts=texts,
-                pages=pages,
-                question_type=resolved["question_type"],
-            )
-        )
-    return out
+    return [_normalize_row(row, fallback_id=str(i)) for i, row in enumerate(rows)]
 
 
 def locate_pdf(doc_name: str, data_dir: str | Path) -> Path | None:
