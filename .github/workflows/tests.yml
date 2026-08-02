@@ -1,0 +1,27 @@
+name: tests
+
+# Unit-test suite (pure logic: chunking, metrics, matchers, pricing, API
+# schemas, auth, the eval fail-fast classifier). No network, no API keys, no
+# database — so it runs on every push/PR, including fork PRs, and backs the
+# "tests" badge in the README honestly.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install package + dev extras (editable)
+        run: python -m pip install -e ".[dev]"
+      - name: Run test suite (no network, no secrets)
+        run: pytest -q
