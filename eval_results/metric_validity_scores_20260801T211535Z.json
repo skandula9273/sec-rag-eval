@@ -1,0 +1,60 @@
+{
+  "timestamp": "2026-08-01T21:15:35.735546+00:00",
+  "mode": "metric_validity_scores",
+  "n_labeled": 50,
+  "human_yes_rate": 0.68,
+  "sample_note": "disagreement-oversampled: metrics are on the CONTESTED pairs, not a population rate (see docs/metric-validity.md).",
+  "best_agreement_matcher": "strict",
+  "kappa_ranking": [
+    "strict",
+    "overlap",
+    "semantic"
+  ],
+  "by_matcher": {
+    "overlap": {
+      "cohen_kappa": 0.1835,
+      "kappa_95ci": [
+        -0.0824,
+        0.4495
+      ],
+      "precision": 0.7826,
+      "recall": 0.5294,
+      "confusion": {
+        "tp": 18,
+        "fp": 5,
+        "fn": 16,
+        "tn": 11
+      }
+    },
+    "semantic": {
+      "cohen_kappa": 0.0809,
+      "kappa_95ci": [
+        -0.2311,
+        0.3929
+      ],
+      "precision": 0.7059,
+      "recall": 0.7059,
+      "confusion": {
+        "tp": 24,
+        "fp": 10,
+        "fn": 10,
+        "tn": 6
+      }
+    },
+    "strict": {
+      "cohen_kappa": 0.2105,
+      "kappa_95ci": [
+        -0.0172,
+        0.4383
+      ],
+      "precision": 1.0,
+      "recall": 0.2941,
+      "confusion": {
+        "tp": 10,
+        "fp": 0,
+        "fn": 24,
+        "tn": 16
+      }
+    }
+  }
+}
