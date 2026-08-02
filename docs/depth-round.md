@@ -629,3 +629,275 @@ cherry-pick numbers, pair every choice with its reason, one variable per ablatio
 and a **locked design doc where every scope deviation needs a dated amendment with
 rationale**. Those amendments are a paper trail of *why* the system is what it is.
 This file is largely an extraction of that trail.
+
+---
+
+# Appendix — full build log (every commit, what it did, why)
+
+The sections above are organized by *topic* (the decision log) and by *theme* (the
+hardening round). This appendix is the **chronological record**: all 91 commits, in
+order, grouped into the phases the project actually moved through, each annotated
+with **what was done / the choice / the result** — so you can read it top to bottom
+and understand the whole build, or `git show <hash>` any line to see the diff.
+
+Read the phases as the story: **V0** (an honest baseline) → **V1** (a ten-lever
+ablation hunt that found the one real lever) → **V2** (productionize it) →
+**product** (frontend + live EDGAR) → **hardening** (measure everything the docs had
+only asserted, and catch the project's own overclaims). Counts shown (tests, recall)
+are the numbers *as of that commit*; they grew over time (70 tests → **118** today).
+
+## Phase V0 — an honest baseline (2026-06-02 → 06-06)
+
+*Goal: the simplest thing that works, measured on a public benchmark, deployed.*
+
+- `650857e` **Initial scaffold + reproducible env** — the whole skeleton in one
+  commit: the shared `QueryEngine` (`pipeline.py`), ingest (parse/chunk/embed/load),
+  dense retrieval, Haiku generation, FastAPI `/health`+`/query`, the FinanceBench
+  eval runner, Streamlit demo, pinned `requirements.lock`, seed 13, `CLAUDE.md`
+  contract. The *architecture* decision that matters is here: **one engine for API
+  and eval** so numbers can't drift from production.
+- `6c18162` **Fix ingest against real PDFs** — first contact with real FinanceBench
+  files broke the parser; fixed `parse.py` + pinned the deps that actually worked.
+- `eac9569` **Send the query vector as a real `pgvector` type** — pgvector's `<=>`
+  needs a `vector`, not a Python list; retrieval silently returned garbage until this.
+- `636707a` **V0 baseline committed + design-doc amendment** — the first honest
+  number: **recall@5 0.44** (below the 0.55 floor, reported as-is). Two eval JSONs
+  committed as the frozen record. The amendment is where **fuzzy(0.5) primary /
+  substring lower-bound** was decided (substring 2/10 vs fuzzy 7/10 → substring was
+  measuring text-extraction agreement, not retrieval).
+- `c7d14f1` **Fix the falsy-zero page-0 bug** — `if page:` dropped page 0 (a real
+  cover page) as evidence. This is the exact bug the `financebench.py` refactor's
+  `_first_present` comment still guards against; fixed + regression test.
+- `2617162` **Fix `/query` 500 after idle** — Neon kills idle-in-transaction
+  connections; switched the engine's connection to **autocommit** so a warm instance
+  doesn't 500 on the first request after a lull.
+- `fbc580f` **Validate `top_k` at the API boundary (1..50)** — reject bad input at
+  the schema, not deep in retrieval; test added.
+- `78115df` **Make the eval runner resilient to per-question failures** — retry a
+  question rather than kill the run. *(This well-intentioned change became the footgun
+  fixed much later in `6dddc9c`: it also swallowed billing outages as "question
+  failures." Noting it here so the arc is visible.)*
+- `b174fee` **Confirmed Haiku 4.5 pricing; derive `cost_is_estimate`** — real prices
+  ($1/$5 per 1M in/out), and the estimate flag is *derived* from `model not in
+  PRICING` so an unpriced model auto-flags itself instead of printing a fake cost.
+- `d848854` **Faithfulness judge (badge) + engine reconnect** — the self-contained
+  Haiku judge (RAGAS *definition*, no fragile RAGAS dep) lands as a badge.
+- `9a02951` **Aggregate faithfulness + real cost → full V0 baseline** — the complete
+  committed V0: recall@5 0.44, **faithfulness 0.94**, **$0.0063/q**.
+- `f5baf56` **`--sleep` throttle** — a rate-limit release valve for full eval runs.
+- `4bbf492`, `3db70ac`, `6534be8` **V0 docs + deploy** — record pricing/limitations
+  in the README; **Cloud Run deploy** (`f0a03fb`: Dockerfiles, `X-API-Key` guard,
+  `DEPLOY.md`); live URLs; the **Mermaid architecture diagram** that renders on GitHub.
+
+## Phase V1 — the ablation program (2026-06-06 → 06-28)
+
+*The substance: hypothesis → change one variable → measure against 0.44 → keep/kill →
+write down why. Ten levers, one winner. Full reasoning is in the Decision log above;
+this is the timeline.*
+
+- `8e7c661` **V1 plan + the methodology call** — execute V1 as *separate,
+  individually-measured increments*, not a bundle (changing corpus + method at once
+  makes the delta un-attributable). Also records the **`pg_search` on Neon is
+  deprecated** finding → lexical = core Postgres FTS.
+- `a9dd29e` **V1.1: hybrid retrieval built** — dense + Postgres FTS fused with RRF;
+  new `lexical.py`, `hybrid.py`, schema tsvector/GIN, `v1.yaml`.
+- `c4fdbc6` **The retrieval-only eval mode + the hybrid A/B + fusion sweep** — the
+  tooling win that unblocked the whole program: `--no-generate` scores recall/MRR with
+  **zero Anthropic calls** (pennies, and a billing outage can't fake a result). Dense
+  reproduced **0.44 exactly**, validating the harness. Verdict: **hybrid regressed**
+  (0.44→0.35); the fusion-weight sweep showed **no blend beats dense** (lexical-only
+  0.04, tables 0.00).
+- `26674b3`, `7011dd3` **CLAUDE.md kept honest after each finding** — the "where we are
+  now" section is re-synced to the *true* state after V1.1 (`26674b3`) and again once
+  hybrid is retired and dense is confirmed the ceiling (`7011dd3`). Keeping the working
+  contract's state block accurate is itself part of the discipline, not an afterthought.
+- `42c3798` → `04b9934` **The hypothesis I got wrong, caught cheap** — `42c3798`
+  amended the design doc to blame *parsing* for the tables gap and promote table
+  extraction. Then `04b9934` ran two ~5-minute diagnostics (`diag_table_parse`,
+  `diag_retrieval_depth`) that **disproved my own amendment**: table evidence
+  *survives* pypdf (8/8), and the gap is **ranking (26% at rank 6–20) + recall (32%
+  miss top-100)**, not parsing. A *correcting* amendment followed. Cheap tests before
+  an expensive re-ingest.
+- `4a31698` **V1.2 reranker (BGE cross-encoder) — built, measured, rejected** —
+  0.44→0.39; it demoted good dense hits. Kept as an off-by-default config knob +
+  documented negative result.
+- `bb7d4c0` **Chunk-size 256 — worse (0.28)** — the dilution hypothesis was backwards;
+  smaller chunks split the big table spans. Ran on a **local exact-cosine numpy index**
+  (Neon's free tier was maxed) — which also proved HNSW wasn't costing recall. Bonus:
+  surfaced that `embed.py` had no 429 retry → added backoff.
+- `d938a4f` **Embedding → 3-large: THE lever** — 0.44→**0.57**, **tables 0.32→0.62**.
+  Five prior negatives had localized the bottleneck to the *representation*; the model
+  swap delivered. Same 512 chunks, only the model differs.
+- `f914ad0` **Reranker over 3-large — hurts *worse*** — 0.57→0.38; definitively
+  retired (more good candidates = more for a generic reranker to demote).
+- `66ac6f8` **`embed.py` fail-fast on `insufficient_quota`** — a billing 429 is not a
+  transient rate limit; stop retrying it. (The rule the eval runner didn't yet obey.)
+- `34336fc` **Larger chunks (1024) over 3-large** — →**0.64**, tables **0.72**; prose
+  stays flat (so it's not *pure* metric inflation — the confound crossing later sized
+  the real-vs-inflated split).
+- `63a6f54` **Dimension ablation — the constraint that dissolved** — 3-large is 3072-d
+  (2× storage, wouldn't fit the free tier). Matryoshka truncation to **1536-d keeps the
+  full recall** at the *same* storage/schema → productionizable at zero infra cost.
+
+## Phase V2 — productionize the win (2026-06-28 → 06-29)
+
+- `dc9313d` **v2 config** — `configs/v2.yaml` = dense + 3-large@1536 + 1024 chunks;
+  `embed.py` passes the OpenAI `dimensions` param; FTS dropped from the default path.
+- `2bafea6` **v2 live baseline recall@5 0.64** — re-ingested to Neon (15,192 chunks /
+  **274 MB**, fits the free tier). Measured through the *same* engine the API uses →
+  deployed == measured. Ops lessons surfaced as failures: **TRUNCATE-before-swap** (a
+  per-doc swap on a near-full DB blew the cap via dead tuples) and `load.py --resume`.
+- `bc5784b` **Document `SEC_RAG_CONFIG`** — the query and corpus embed model *must*
+  match or retrieval is incoherent; made explicit in `DEPLOY.md`.
+- `e7491dd` **Faithfulness judge off the `/query` critical path** — the 2nd LLM call
+  (~29% of latency) is now opt-in; eval still computes the committed number.
+- `cfd59db` **Full v2 baseline committed** — 150 q, full pipeline, 0 errors:
+  **faithfulness 0.93** (survived the retrieval change), recall@5 0.64.
+
+## Phase — the product surface: frontend (2026-06-29 → 06-30)
+
+*Decision (with the owner): keep the benchmarked backend, add a static frontend on the
+deployed API. Streamlit can't do the target design or run on Pages, so: vanilla
+HTML/CSS/JS.*
+
+- `f980fbf` **Streaming `/query/stream` (SSE)** — answer deltas then a final frame with
+  citations + metrics; big perceived-latency win (TTFT).
+- `ae90c74` **Static frontend + GitHub Pages** — the first dark landing page over the
+  live API; Pages deploy workflow.
+- `c77a17d` → `b0c32c3` **The frontend/API-key UX iteration** — light turquoise theme
+  (`c77a17d`, owner's call); auto-run the pending question after a key save (`fa4be1a`);
+  key made dismissable/optional (`cc335e5`, `a985f9f`); a **temporary hardcoded gate
+  key** for frictionless testing (`265f801`, explicitly "rotate + remove after");
+  cache-busting `?v=` + a **visible build marker** to diagnose stale loads (`4d6627b`,
+  `8016819`); then **removed the key UI entirely** for a zero-friction open API
+  (`b0c32c3`). The build-marker/cache-bust work is the start of the caching saga below.
+
+## Phase — live EDGAR: any company, on demand (2026-06-30)
+
+*Decision (with the owner): add a live path alongside the benchmark. Architecture flip:
+static pre-indexed corpus → fetch-and-index-on-demand (in-memory exact-cosine index →
+no storage cap; Neon cache for cold starts). EDGAR was verified live before building.*
+
+- `f3778cd` **Live EDGAR backend** — `edgar/client.py` (ticker→CIK, submissions API,
+  document fetch, HTML→text) + `edgar/live_engine.py` (fetch→parse→chunk→embed→retrieve→
+  stream, same event shape as the benchmark path).
+- `2ce0cea` **Wire to API + frontend** — `/query/live/stream`; ticker box → any
+  company. Caught a real prod-only gap here: `bs4` wasn't a declared dependency (worked
+  locally, 500'd deployed) → added to `pyproject`.
+- `2508c09` **Better HTML parsing** — strip XBRL noise, preserve tables.
+- `7fec695` **All filing types (10-K/10-Q/8-K) with auto-detection** from the question.
+- `5f52c2a` **BYOK** — visitors run on their *own* OpenAI + Anthropic keys via
+  per-request headers (their credits), making safe public sharing possible.
+- `41b0272` **Dedicated table extractor** — merges split currency cells (`$` and the
+  number landing in separate `<td>`s).
+- `35d24e9` **Persistent Neon cache** for embedded filings — fast cold starts, bounded.
+- `e561c74` **Multi-filing compare across periods** — "vs last year" / "5-year trend"
+  pulls 2–5 filings.
+- `0ec5864` **Section-labeled citations** ("Item 1A. Risk Factors") + `require-BYOK`
+  flag + EDGAR tests.
+- `365f657` **Frontier polish** — per-IP **rate limit**, deeper multi-filing, clean
+  section handling, optional background **pre-warm** of popular tickers.
+- `78d0221` **Test fix (70 passing)** — `detect_multi` parses digits, not the word
+  "ten".
+
+## Phase — docs + the caching saga (2026-06-30 → 07-02)
+
+- `2324377`, `31baa03` **Docs** — `versions.md`, `decisions-and-steps.md`; refreshed
+  README + CLAUDE.md to the shipped live-EDGAR system.
+- `c6fdbaf` **Cache-proof hosting** — GitHub Pages forces a 10-min HTML cache we can't
+  change (and had flaky deploys), so also serve `web/` from **Cloud Run with `no-store`
+  headers** (`web_server.py`, `Dockerfile.web`).
+- `b449c07` **The bug that only *looked* like caching (the big lesson)** — for many
+  rounds "the old page keeps loading" was chased as a cache/CDN/browser problem. It
+  reproduced on a *fresh device* (owner's call) → proving it wasn't cache. Real cause:
+  a **CSS bug**, `.modal { display:flex }` overrode the HTML `hidden` attribute, so the
+  key popup was permanently open for everyone. One line fixed it: `[hidden] {
+  display:none !important }`. **Lesson: verify the rendered artifact, not the served
+  files; a fresh-device repro is the fastest way to split "our bug" from "your cache."**
+- `0dbfb76` → `a5948f5` **The demo-link flip-flop** — pointed back to GitHub Pages by
+  request (`0dbfb76`), then settled on the **cache-proof Cloud Run host** two commits
+  later (`a5948f5`) once Pages proved unreliable. The waffle is itself part of the
+  hosting saga — Pages *looked* simpler until its cache + flaky deploys bit.
+- `4b53277` **`docs/PROJECT-LOG.md`** — the exhaustive phase narrative (this appendix's
+  companion; it stops here at 62 commits).
+
+## Phase — post-V2 hardening + measurement (2026-07-30 → 07-31)
+
+*A review pass found gaps between what the docs **claimed** and what was **measured**.
+This round closed them in the project's own spirit — measure first, commit an artifact
+for every number, and catch the project's own overclaims. The thematic write-ups are in
+"Post-V2 hardening round" above; here they are in commit order.*
+
+- `35bc7fb` **v2 substring floor + the faithfulness spot-check** — the strict recall
+  bracket for v2 (`[0.093, 0.64]`) and the Opus-adjudicated audit of the Haiku judge
+  (**19/20**, the one miss *harsh*) — the spot-check the design doc had long promised.
+- `ae9cc89` **Measure the live API latency** — replaces an *asserted* "~$0.005 and
+  faster" with a committed run: server **p50 2.06 s / p95 6.19 s**, **$0.0045/q**, TTFT
+  ~1.0 s. (A rule-#4 fix: the number existed only as a claim before.)
+- `e8fa6ac` **Connection pool** — the known single-connection debt, replaced with a
+  psycopg pool; **4.9×** on 24-way concurrent retrieval. Honest scope: a
+  concurrency/throughput fix, *single-request* latency unchanged.
+- `a307d83` **Concision answer prompt (the one that fought back)** — output tokens
+  −25%, generation p50 −~20%. The blunt first pass **regressed faithfulness 0.90→0.775**
+  (mostly a judge artifact on terse refusals + one real loss); two targeted clauses
+  brought it to **0.9375**. Would-do-differently: gate prompt changes on the spot-check
+  from the start.
+- `0f00c6a` **Authoritative 150-q run under the concise prompt** — 0 errors: recall@5
+  0.64 unchanged, faithfulness →**0.934**, cost →**$0.0087** (strictly-positive change).
+- `00f999a`, `31e2ae0` **Docs** — the hardening round written up; demo consolidated to
+  the Cloud Run host with an honest **~13 s cold-start** note (the old "~15–25 s" was
+  never measured).
+- `4a72fb0` → `00fc967` → `112e4ff` **The coverage guardrail + the fix I *didn't*
+  make** — a liveness audit inferred the live path indexed only a *slice* of each 10-K;
+  measuring first showed it indexes the **full** document (the "~115 chunks" was a mean
+  across mixed filing sizes). So **no indexer change** — instead added `_coverage_check`
+  (warn if a 10-K/10-Q doesn't reach the §13 signature marker) as observability
+  (`4a72fb0`), wrote the audit + "the fix I didn't make" into this doc (`00fc967`), and
+  surfaced `sec_rag` logs in Cloud Run so the warning is actually visible (`112e4ff`).
+- `a762965` **Correct four overstated README claims** — tests count, corpus size,
+  V0→V2 attribution, and the metric framing. A deliberate self-audit (rule #2).
+- `195f8ec` → `e067572` **Answer accuracy — is the answer *right*, not just retrieved?**
+  Built a numeric matcher + LLM judge (`195f8ec`), committed the 150-q artifact
+  (`0e789a2`: LLM 0.76 of attempted, 37% refusal), then used it as a **lever**: raising
+  `top_k` 5→20 (`e067572`) cut refusals 0.37→0.32 and lifted over-all accuracy 0.47→0.50
+  at ~2× cost — a deliberate, measured trade now baked into `v2.yaml`.
+- `8d6d689` → `b6838eb` **Pluggable evidence matchers** — recall re-run under
+  **strict / overlap / semantic** (`8d6d689`), then every headline ablation re-checked
+  across all three (`b6838eb`) to see which conclusions survive the metric. This is what
+  turned "recall@5 0.64" into "recall is a *bracket*."
+- `10ff614` → `349a185` **Matcher validity — and the false positive** — built a human
+  labeling harness (`10ff614`), then an **LLM-proxy** adjudication that reported the
+  shipped overlap matcher agreeing best at **κ 0.67** (`349a185`). *This number was
+  later shown to be an artifact of the LLM labeler* — see `5f869a2`.
+- `ecc9460` → `ff6bde3` **Cross the model×chunk confound** — the full 2×3×3 grid +
+  chunk-invariant answer accuracy: the +0.207 gain is **~80% real, ~20% chunk-metric
+  inflation**, effects additive, embedding the real driver. Docs reconciled (`ff6bde3`).
+- `d521988` **eval-as-CI** — a per-PR retrieval-only smoke gate on recall@5 vs a frozen
+  baseline, params in `configs/ci_eval.yaml`, skips gracefully without secrets, ~$0.001/run.
+- `6dddc9c` **Eval fail-fast on billing/account outages** — closes the `78115df`
+  footgun (it bit *twice* this round). The hard part: a credit-out is a **400** (caught
+  by message, not status) and a quota-out is a **429** indistinguishable from a transient
+  limit except for a marker. `eval/errors.py:fatal_reason` classifies it; the run aborts
+  with a "DO NOT CITE" banner. 11 tests.
+- `ff4ef14` **Independently re-measure the pool win** — same A/B, **5.6×** this time;
+  the exact ratio floats with Neon jitter, the win is robustly large.
+- `a44a435` **Correct the "clean clone reproduces the headline" claim** — it was false
+  (the corpus lives in Neon, PDFs are gitignored); the README now spells out the three
+  reproducibility tiers. Another rule-#2 self-correction.
+- `c050719` **Live-path eval harness + 25 hand-verified EDGAR questions** — begins
+  scoring the *live* product (previously unscored — the gap PROJECT-LOG §8A flagged).
+- `5f869a2` **The metric-validity study + README reframe** — hand-labeling the 50 pairs
+  myself dropped the shipped matcher to **κ 0.18 (third of three, no matcher beats chance
+  at n=50)**, exposing the `349a185` κ 0.67 as an **LLM-labeler artifact** — shipped once,
+  then caught. README reframed as an *evaluation platform*. This is the honesty flagship.
+
+## Phase — repo polish (2026-08-01)
+
+- `714e312` **Refactor `financebench.py`** — extract a pure, testable `_normalize_row`;
+  fold column resolution + required-field validation into `_resolve_field`; lift magic
+  keys into constants. Public API + behavior unchanged; the 6 evidence tests still pass.
+- `3200ffc` **Professional README makeover** — centered hero (demo screenshot), badges,
+  TOC, scannable highlights with the deep caveats in `<details>`; added an **MIT
+  `LICENSE`** (FinanceBench data stays CC-BY-NC), a real no-secrets **tests CI**
+  workflow (backs the badge), and rendered `assets/`. Corrected the stale test count to
+  the true **118 passing / 104 functions**.
