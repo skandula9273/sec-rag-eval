@@ -1,0 +1,494 @@
+# Claims manifest — maps every quantitative README claim to its source of truth.
+#
+# Consumed by `src/sec_rag/eval/check_numbers.py` (`make check-numbers`). Each
+# `claims` entry: an `anchor` regex (ONE capture group = the number, matched in
+# README.md exactly once), the `artifact` file + `path` (list of keys) whose value
+# it must equal within `tol`. Derived numbers use `values:` + `expr:` instead.
+# `unsourced` = numbers with no committed artifact (recorded, listed, never failed).
+# `allow` = verified values that legitimately recur (secondary/footnote mentions).
+# `ignore` = lines whose numbers are not eval claims.
+#
+# Deliberate older-run citations are expressible: the `artifact` field names the
+# exact run, so "cites the 2026-06-29 run on purpose" is a line here, not staleness.
+
+readme: README.md
+artifacts_dir: eval_results
+
+claims:
+  # ---- Results table (V0 = one run 20260605T020304Z; V2 mixes runs, see footnote) ----
+  - id: results.recall5.v0
+    desc: recall@5 (fuzzy) V0
+    anchor: 'recall@5 \(fuzzy\) \| ([\d.,]+) \|'
+    artifact: financebench_20260605T020304Z.json
+    path: [recall_at_k, "recall@5"]
+    tol: 0.005
+  - id: results.recall5.v2
+    desc: recall@5 (fuzzy) V2
+    anchor: 'recall@5 \(fuzzy\) \| 0\.44 \| \*\*([\d.,]+)\*\*'
+    artifact: financebench_20260629T160938Z.json
+    path: [recall_at_k, "recall@5"]
+    tol: 0.005
+  - id: results.recall10.v0
+    desc: recall@10 (fuzzy) V0
+    anchor: 'recall@10 \(fuzzy\) \| ([\d.,]+) \|'
+    artifact: financebench_20260605T020304Z.json
+    path: [recall_at_k, "recall@10"]
+    tol: 0.005
+  - id: results.recall10.v2
+    desc: recall@10 (fuzzy) V2 (deliberately the full verbose run = 0.74 exactly)
+    anchor: 'recall@10 \(fuzzy\) \| 0\.54 \| \*\*([\d.,]+)\*\*'
+    artifact: financebench_20260629T193049Z.json
+    path: [recall_at_k, "recall@10"]
+    tol: 0.005
+  - id: results.tables5.v0
+    desc: tables@5 (fuzzy) V0 = metrics-generated recall@5
+    anchor: 'tables@5 \(fuzzy\) \| ([\d.,]+) \|'
+    artifact: financebench_20260605T020304Z.json
+    path: [per_category_recall, metrics-generated, "recall@5"]
+    tol: 0.005
+  - id: results.tables5.v2
+    desc: tables@5 (fuzzy) V2 = metrics-generated recall@5
+    anchor: 'tables@5 \(fuzzy\) \| 0\.32 \| \*\*([\d.,]+)\*\*'
+    artifact: financebench_20260629T160938Z.json
+    path: [per_category_recall, metrics-generated, "recall@5"]
+    tol: 0.005
+  - id: results.faithfulness.v0
+    desc: faithfulness V0
+    anchor: 'faithfulness \| ([\d.,]+) \|'
+    artifact: financebench_20260605T020304Z.json
+    path: [faithfulness, mean]
+    tol: 0.005
+  - id: results.faithfulness.v2
+    desc: faithfulness V2 (full-pipeline verbose run, judge on)
+    anchor: 'faithfulness \| 0\.94 \| \*\*([\d.,]+)\*\*'
+    artifact: financebench_20260629T193049Z.json
+    path: [faithfulness, mean]
+    tol: 0.005
+  - id: results.cost.v0
+    desc: cost/query V0
+    anchor: 'cost / query \| \$([\d.,]+) \|'
+    artifact: financebench_20260605T020304Z.json
+    path: [cost_usd, mean_per_query]
+    tol: 0.0002
+  - id: results.cost.v2
+    desc: cost/query V2 at deployed top_k=20
+    anchor: 'cost / query \| \$0\.0063 \| ~\$([\d.,]+) \(top_k=20\)'
+    artifact: financebench_20260731T115740Z.json
+    path: [cost_usd, mean_per_query]
+    tol: 0.0006
+
+  # ---- Highlights ----
+  - id: highlight.recall5.v0
+    desc: highlight recall@5 V0
+    anchor: 'recall@5 \*\*([\d.,]+) → 0\.64\*\*'
+    artifact: financebench_20260605T020304Z.json
+    path: [recall_at_k, "recall@5"]
+    tol: 0.005
+  - id: highlight.recall5.v2
+    desc: highlight recall@5 V2
+    anchor: 'recall@5 \*\*0\.44 → ([\d.,]+)\*\*'
+    artifact: financebench_20260629T160938Z.json
+    path: [recall_at_k, "recall@5"]
+    tol: 0.005
+  - id: highlight.correctness
+    desc: highlight correctness (over 150)
+    anchor: 'correctness \*\*([\d.,]+)\*\*'
+    artifact: financebench_20260731T115740Z.json
+    path: [answer_accuracy, overall, llm, accuracy_over_all]
+    tol: 0.005
+  - id: highlight.faithfulness
+    desc: highlight faithfulness
+    anchor: 'faithfulness \*\*([\d.,]+)\*\*\.'
+    artifact: financebench_20260629T193049Z.json
+    path: [faithfulness, mean]
+    tol: 0.005
+  - id: highlight.kappa.proxy
+    desc: highlight LLM-proxy overlap kappa
+    anchor: 'shipped\n?\s*matcher at \*\*κ ([\d.,]+)\*\*'
+    artifact: metric_validity_scores_20260731T140147Z.json
+    path: [by_matcher, overlap, cohen_kappa]
+    tol: 0.005
+  - id: highlight.kappa.human
+    desc: highlight hand-labeled overlap kappa
+    anchor: 'dropped it to \*\*κ ([\d.,]+)\*\*'
+    artifact: metric_validity_scores_20260801T211535Z.json
+    path: [by_matcher, overlap, cohen_kappa]
+    tol: 0.005
+  - id: highlight.latency.p50
+    desc: warm server p50 (s)
+    anchor: 'server \*\*p50 ([\d.,]+) s'
+    values: {ms: [api_latency_20260731T004411Z.json, [warm_server_latency_ms, p50]]}
+    expr: ms / 1000
+    tol: 0.05
+  - id: highlight.latency.p95
+    desc: warm server p95 (s)
+    anchor: 'p50 2\.1 s / p95 ([\d.,]+) s'
+    values: {ms: [api_latency_20260731T004411Z.json, [warm_server_latency_ms, p95]]}
+    expr: ms / 1000
+    tol: 0.05
+  - id: highlight.cost.live
+    desc: live API cost/query
+    anchor: '\*\*~\$([\d.,]+)/query\*\* \(measured'
+    artifact: api_latency_20260731T004411Z.json
+    path: [cost_per_query_usd, mean]
+    tol: 0.0003
+
+  # ---- Recall bracket (source: matcher_study_baseline, live v2 config) ----
+  - id: bracket.strict
+    desc: bracket strict recall@5
+    anchor: '([\d.,]+)  ●'
+    artifact: matcher_study_baseline_20260731T123250Z.json
+    path: [by_matcher, strict, recall_at_k, "recall@5"]
+    tol: 0.001
+  - id: bracket.fuzzy
+    desc: bracket overlap recall@5
+    anchor: ' ([\d.,]+) ●'
+    artifact: matcher_study_baseline_20260731T123250Z.json
+    path: [by_matcher, overlap, recall_at_k, "recall@5"]
+    tol: 0.001
+  - id: bracket.semantic
+    desc: bracket semantic recall@5
+    anchor: '● ([\d.,]+)'
+    artifact: matcher_study_baseline_20260731T123250Z.json
+    path: [by_matcher, semantic, recall_at_k, "recall@5"]
+    tol: 0.001
+
+  # ---- Bracket footnote (exact matcher_study values + the confound-grid contrast) ----
+  - id: bracket.fn.strict
+    desc: bracket footnote strict (exact; note the line-wrap after the value)
+    anchor: 'retrieval \(([\d.,]+) / 0\.64 /'
+    artifact: matcher_study_baseline_20260731T123250Z.json
+    path: [by_matcher, strict, recall_at_k, "recall@5"]
+    tol: 0.0005
+  - id: bracket.fn.semantic
+    desc: bracket footnote semantic (exact; wraps to the next line after '> ')
+    anchor: '> ([\d.,]+)\)'
+    artifact: matcher_study_baseline_20260731T123250Z.json
+    path: [by_matcher, semantic, recall_at_k, "recall@5"]
+    tol: 0.0005
+  - id: bracket.fn.grid.overlap
+    desc: confound-grid 3-large/1024 overlap
+    anchor: 'reads \*\*0\.0933 / ([\d.,]+) / 0\.8133\*\*'
+    artifact: confound_grid_20260731T162218Z.json
+    path: [grid, "3-large/1024", overlap, recall_at_k, "recall@5"]
+    tol: 0.0005
+  - id: bracket.fn.grid.semantic
+    desc: confound-grid 3-large/1024 semantic
+    anchor: '0\.0933 / 0\.6467 / ([\d.,]+)\*\*'
+    artifact: confound_grid_20260731T162218Z.json
+    path: [grid, "3-large/1024", semantic, recall_at_k, "recall@5"]
+    tol: 0.0005
+
+  # ---- Provenance footnote (faithfulness + cost sources) ----
+  - id: fn.faithfulness.verbose
+    desc: provenance faithfulness verbose
+    anchor: '\*\*([\d.,]+)\*\* verbose'
+    artifact: financebench_20260629T193049Z.json
+    path: [faithfulness, mean]
+    tol: 0.0005
+  - id: fn.faithfulness.concise
+    desc: provenance faithfulness concise
+    anchor: '\*\*([\d.,]+)\*\* concise'
+    artifact: financebench_20260731T025337Z.json
+    path: [faithfulness, mean]
+    tol: 0.0005
+  - id: fn.cost.topk20
+    desc: provenance cost at top_k=20
+    anchor: '115740Z`, \$([\d.,]+)/q'
+    artifact: financebench_20260731T115740Z.json
+    path: [cost_usd, mean_per_query]
+    tol: 0.0005
+
+  # ---- Substring floor (V0, strict) ----
+  - id: substring.recall5.v0
+    desc: V0 substring recall@5
+    anchor: 'scores recall@5 \*\*([\d.,]+)\*\*'
+    artifact: financebench_20260604T022143Z.json
+    path: [recall_at_k, "recall@5"]
+    tol: 0.0005
+  - id: substring.tables5.v0
+    desc: V0 substring tables@5
+    anchor: 'tables@5 \*\*([\d.,]+)\*\*'
+    artifact: financebench_20260604T022143Z.json
+    path: [per_category_recall, metrics-generated, "recall@5"]
+    tol: 0.0005
+
+  # ---- Confound decomposition (all single paths in confound_study) ----
+  - id: confound.gain
+    desc: V0->V2 overlap recall@5 gain
+    anchor: 'Decomposing the \*\*\+([\d.,]+)\*\* overlap'
+    artifact: confound_study_20260731T170928Z.json
+    path: ["attribution_v0_to_v2_recall@5", overlap_headline_gain]
+    tol: 0.001
+  - id: confound.embedding
+    desc: embedding component
+    anchor: '\*\*embedding \+([\d.,]+)\*\*'
+    artifact: confound_study_20260731T170928Z.json
+    path: ["attribution_v0_to_v2_recall@5", embedding_component]
+    tol: 0.001
+  - id: confound.embedding.pct
+    desc: embedding share of gain (61%)
+    anchor: '\*\*embedding \+0\.127\*\* \(([\d.,]+)%\)'
+    values:
+      emb: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", embedding_component]]
+      gain: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", overlap_headline_gain]]
+    expr: emb / gain * 100
+    tol: 1.5
+  - id: confound.acc.embedding
+    desc: accuracy embedding effect
+    anchor: 'answer accuracy rises \+([\d.,]+) and refusals'
+    artifact: confound_study_20260731T170928Z.json
+    path: [accuracy_effects, "embedding_@512"]
+    tol: 0.005
+  - id: confound.refusal.v0
+    desc: refusal rate 3-small/512
+    anchor: '([\d.,]+) → 0\.39 across'
+    artifact: confound_study_20260731T170928Z.json
+    path: [refusal_rate, "3-small/512"]
+    tol: 0.01
+  - id: confound.refusal.3l512
+    desc: refusal rate 3-large/512
+    anchor: '0\.51 → ([\d.,]+) across'
+    artifact: confound_study_20260731T170928Z.json
+    path: [refusal_rate, "3-large/512"]
+    tol: 0.01
+  - id: confound.chunk
+    desc: chunk component
+    anchor: '\*\*chunk-size \+([\d.,]+)\*\*'
+    artifact: confound_study_20260731T170928Z.json
+    path: ["attribution_v0_to_v2_recall@5", chunk_component_overlap]
+    tol: 0.005
+  - id: confound.chunk.pct
+    desc: chunk share of gain (39%)
+    anchor: '\*\*chunk-size \+0\.080\*\* \(([\d.,]+)%\)'
+    values:
+      chunk: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", chunk_component_overlap]]
+      gain: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", overlap_headline_gain]]
+    expr: chunk / gain * 100
+    tol: 1.5
+  - id: confound.chunk.real
+    desc: chunk real component
+    anchor: 'only \*\*~\+([\d.,]+) is real\*\*'
+    artifact: confound_study_20260731T170928Z.json
+    path: ["attribution_v0_to_v2_recall@5", chunk_component_real_est]
+    tol: 0.002
+  - id: confound.acc.chunk
+    desc: accuracy chunk effect
+    anchor: 'accuracy rises a matching \+([\d.,]+)'
+    artifact: confound_study_20260731T170928Z.json
+    path: [accuracy_effects, "chunk_512to1024_@3large"]
+    tol: 0.002
+  - id: confound.chunk.inflation
+    desc: chunk metric inflation
+    anchor: 'other \*\*~\+([\d.,]+) is'
+    artifact: confound_study_20260731T170928Z.json
+    path: ["attribution_v0_to_v2_recall@5", chunk_metric_inflation_est]
+    tol: 0.002
+  - id: confound.acc.total
+    desc: accuracy V0->V2 total
+    anchor: 'climbs V0→V2 by \*\*\+([\d.,]+) \(0\.36 → 0\.47\)'
+    artifact: confound_study_20260731T170928Z.json
+    path: [accuracy_effects, v0_to_v2_total]
+    tol: 0.005
+  - id: confound.acc.v0
+    desc: accuracy V0 (over all)
+    anchor: '\(([\d.,]+) → 0\.47\)'
+    artifact: confound_study_20260731T170928Z.json
+    path: [accuracy_over_all, "3-small/512"]
+    tol: 0.005
+  - id: confound.acc.v2
+    desc: accuracy V2 (over all)
+    anchor: '\(0\.36 → ([\d.,]+)\)'
+    artifact: confound_study_20260731T170928Z.json
+    path: [accuracy_over_all, "3-large/1024"]
+    tol: 0.005
+  - id: confound.real.pct
+    desc: real share of headline (~80%)
+    anchor: 'So \*\*~([\d.,]+)% of the headline is real'
+    values:
+      emb: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", embedding_component]]
+      real: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", chunk_component_real_est]]
+      gain: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", overlap_headline_gain]]
+    expr: (emb + real) / gain * 100
+    tol: 2.0
+  - id: confound.inflation.pct
+    desc: inflation share of headline (~20%)
+    anchor: 'and \*\*~([\d.,]+)% is chunk-size metric'
+    values:
+      infl: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", chunk_metric_inflation_est]]
+      gain: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", overlap_headline_gain]]
+    expr: infl / gain * 100
+    tol: 2.0
+  - id: highlight.real.pct
+    desc: highlight ~80% real
+    anchor: '\*\*~([\d.,]+)% real system improvement'
+    values:
+      emb: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", embedding_component]]
+      real: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", chunk_component_real_est]]
+      gain: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", overlap_headline_gain]]
+    expr: (emb + real) / gain * 100
+    tol: 2.0
+  - id: highlight.inflation.pct
+    desc: highlight ~20% inflation
+    anchor: 'real system improvement, ~([\d.,]+)% chunk-size'
+    values:
+      infl: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", chunk_metric_inflation_est]]
+      gain: [confound_study_20260731T170928Z.json, ["attribution_v0_to_v2_recall@5", overlap_headline_gain]]
+    expr: infl / gain * 100
+    tol: 2.0
+
+  # ---- Answer-accuracy table (all from the top_k=20 accuracy run) ----
+  - id: accuracy.attempted
+    desc: LLM accuracy of attempted
+    anchor: '\(of attempted\) \| \*\*([\d.,]+)\*\*'
+    artifact: financebench_20260731T115740Z.json
+    path: [answer_accuracy, overall, llm, accuracy]
+    tol: 0.006
+  - id: accuracy.overall
+    desc: LLM accuracy over all 150
+    anchor: '\(over all 150\) \| \*\*([\d.,]+)\*\*'
+    artifact: financebench_20260731T115740Z.json
+    path: [answer_accuracy, overall, llm, accuracy_over_all]
+    tol: 0.005
+  - id: accuracy.numeric
+    desc: numeric-exact accuracy
+    anchor: 'numeric-exact accuracy \| \*\*([\d.,]+)\*\*'
+    artifact: financebench_20260731T115740Z.json
+    path: [answer_accuracy, overall, numeric, accuracy]
+    tol: 0.006
+  - id: accuracy.refusal
+    desc: refusal rate
+    anchor: 'refusal rate\*\* \| \*\*([\d.,]+)\*\*'
+    artifact: financebench_20260731T115740Z.json
+    path: [answer_accuracy, overall, refusal_rate]
+    tol: 0.005
+
+  # ---- Metric honesty (kappa table, hand-labeled) ----
+  - id: honesty.kappa.proxy
+    desc: LLM-proxy overlap kappa
+    anchor: 'best of three at κ ([\d.,]+)'
+    artifact: metric_validity_scores_20260731T140147Z.json
+    path: [by_matcher, overlap, cohen_kappa]
+    tol: 0.005
+  - id: honesty.kappa.overlap
+    desc: hand-labeled overlap kappa
+    anchor: 'dropped it to \*\*κ ([\d.,]+) \("slight"\)'
+    artifact: metric_validity_scores_20260801T211535Z.json
+    path: [by_matcher, overlap, cohen_kappa]
+    tol: 0.005
+  - id: honesty.kappa.strict
+    desc: hand-labeled strict kappa
+    anchor: 'behind strict κ ([\d.,]+);'
+    artifact: metric_validity_scores_20260801T211535Z.json
+    path: [by_matcher, strict, cohen_kappa]
+    tol: 0.005
+  - id: honesty.kappa.semantic
+    desc: hand-labeled semantic kappa
+    anchor: 'semantic κ ([\d.,]+)\)'
+    artifact: metric_validity_scores_20260801T211535Z.json
+    path: [by_matcher, semantic, cohen_kappa]
+    tol: 0.005
+
+  # ---- Live-demo latency (the one decimal one is sourced to the batch cold row) ----
+  - id: demo.latency.first_request
+    desc: benchmark first-request-in-batch (s)
+    anchor: 'benchmark''s ([\d.,]+) s first-request'
+    values: {ms: [api_latency_20260731T004411Z.json, [cold_start, server_latency_ms]]}
+    expr: ms / 1000
+    tol: 0.05
+
+  # ---- Corpus / CI (sourced to artifacts/config) ----
+  - id: corpus.chunks
+    desc: v2 corpus chunk count
+    anchor: '\*\*84-filing / ([\d.,]+)-chunk\*\*'
+    artifact: confound_grid_20260731T162218Z.json
+    path: [n_chunks_per_cell, "3-large/1024"]
+    tol: 0.5
+  - id: ci.baseline
+    desc: CI gate baseline recall@5 (sourced to the gate config)
+    anchor: 'baseline \(([\d.,]+)\)'
+    artifact: configs/ci_eval.yaml
+    path: ["baseline_recall@5"]
+    tol: 0.0005
+  - id: ci.max_drop
+    desc: CI gate max_drop (sourced to the gate config)
+    anchor: '`max_drop` \(([\d.,]+)\)'
+    artifact: configs/ci_eval.yaml
+    path: [max_drop]
+    tol: 0.0005
+
+unsourced:
+  - id: corpus.filings
+    desc: 84-filing corpus
+    anchor: '\*\*([\d.,]+)-filing'
+    reason: infra/ingest stat — count of ingested filings, not in any committed eval JSON
+  - id: corpus.companies
+    desc: ~10,400 EDGAR companies
+    anchor: '\*\*~([\d.,]+) companies'
+    reason: infra stat — size of EDGAR ticker->CIK map, not an eval output
+  - id: corpus.size_mb
+    desc: 274 MB v2 corpus
+    anchor: '\*\*([\d.,]+) MB v2 corpus'
+    reason: infra/DB stat — Neon storage footprint, not in any committed eval JSON
+  - id: demo.cold_start
+    desc: ~13 s web cold start
+    anchor: '~([\d.,]+) s Cloud Run scale-to-zero'
+    reason: observed once — Cloud Run scale-to-zero wake of the web host, not benchmarked
+  - id: tests.count
+    desc: 118 tests
+    anchor: 'runs all \*\*([\d.,]+) tests\*\*'
+    reason: verified by running pytest (no secrets), not a committed JSON artifact
+  - id: tests.functions
+    desc: test-function count
+    anchor: 'tests\*\* \(([\d.,]+) functions\)'
+    reason: verified by pytest collection, not a committed JSON artifact
+  - id: audit.agreement
+    desc: judge audit 19/20
+    anchor: 'judge on 20 verdicts and agreed \*\*([\d.,]+)/20\*\*'
+    reason: adjudication recorded in docs/faithfulness-spotcheck.md, not a JSON field
+  - id: target.recall
+    desc: V2 recall@5 target
+    anchor: '\*\*([\d.,]+)\*\* \| 0\.75'
+    reason: design-doc target (the 0.75 goal), not a measured value
+  - id: target.faithfulness
+    desc: faithfulness target
+    anchor: '\*\*0\.93\*\* \| ([\d.,]+) ✅'
+    reason: design-doc target (0.80 floor), not a measured value
+  - id: ci.cost_per_run
+    desc: CI cost per run
+    anchor: '~\$([\d.,]+)/run'
+    reason: estimate (~30 query embeddings at CI depth), not a committed measurement
+  - id: ci.resolution
+    desc: CI per-question recall resolution
+    anchor: 'is ±([\d.,]+) recall@5'
+    reason: arithmetic (1/30 on the 30-q subset), not an artifact value
+
+# Verified values that legitimately recur (secondary mentions, restatements,
+# fixed thresholds, design-doc targets). Coverage treats a number as fine if it
+# equals one of these within tol. Primary occurrences are strictly checked above.
+allow:
+  - {value: 0.64, tol: 0.001, why: recall@5 V2 recurs (highlight/bracket/footnote/target)}
+  - {value: 0.093, tol: 0.001, why: strict recall recurs (bracket + footnote)}
+  - {value: 0.0933, tol: 0.001, why: strict recall (footnote/grid contrast)}
+  - {value: 0.207, tol: 0.001, why: gain recurs (summary heading + body)}
+  - {value: 0.75, tol: 0.001, why: design-doc recall target}
+  - {value: 0.80, tol: 0.001, why: design-doc faithfulness target}
+  - {value: 0.005, tol: 0.0005, why: design-doc cost target (<$0.005)}
+  - {value: 0.5, tol: 0.001, why: fuzzy(0.5) matcher threshold (structural)}
+  - {value: 50, tol: 0.5, why: "'>=50% of gold tokens' matcher rule (structural)"}
+  - {value: 74, tol: 0.5, why: restatement of 0.74 attempted-accuracy as ~74%}
+  - {value: 0.017, tol: 0.0005, why: V2 cost recurs (table + provenance footnote)}
+  - {value: 0.0045, tol: 0.0003, why: live-API cost recurs (highlight + footnote)}
+  - {value: 0.93, tol: 0.001, why: faithfulness V2 recurs (table/highlight/footnote/audit)}
+  - {value: 0.929, tol: 0.001, why: committed faithfulness recurs (footnote + audit detail)}
+  - {value: 0.10, tol: 0.001, why: CI max_drop recurs (restated as '0.10 ~= 3 questions')}
+  - {value: 95, tol: 0.5, why: 95% confidence-interval level (structural)}
+
+# Lines whose numbers are not eval claims (skipped by the coverage scan).
+ignore:
+  - 'shields\.io|img src=|https?://|badge'          # badge / image / URL lines
+  - 'Python 3\.11'                                   # runtime version
+  - '1,200 million'                                  # numeric-normalizer example ($1.2B)
+  - 'assets/hero\.png'                               # image ref with ?v=
+  - 'grew 5%'                                         # fuzzy-blindness example ("grew 5%" vs "25%")
+  - 'CC-BY-NC'                                        # license name (…-4.0), not a metric

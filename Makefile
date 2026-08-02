@@ -1,17 +1,18 @@
-.PHONY: help install lock db-init data ingest query eval demo test lint fmt
+.PHONY: help install lock db-init data ingest query eval demo test lint fmt check-numbers
 
 CONFIG ?= configs/v0.yaml
 
 help:
-	@echo "install   install package + dev extras (editable)"
-	@echo "lock      freeze exact versions to requirements.lock (reproducibility)"
-	@echo "db-init   apply db/schema.sql to \$$DATABASE_URL"
-	@echo "data      download FinanceBench PDFs into data/ (see README)"
-	@echo "ingest    parse -> chunk -> embed -> load to pgvector   (CONFIG=$(CONFIG))"
-	@echo "eval      run FinanceBench eval, write timestamped JSON to eval_results/"
-	@echo "demo      launch Streamlit demo"
-	@echo "test      run pytest"
-	@echo "lint      ruff check"
+	@echo "install        install package + dev extras (editable)"
+	@echo "lock           freeze exact versions to requirements.lock (reproducibility)"
+	@echo "db-init        apply db/schema.sql to \$$DATABASE_URL"
+	@echo "data           download FinanceBench PDFs into data/ (see README)"
+	@echo "ingest         parse -> chunk -> embed -> load to pgvector   (CONFIG=$(CONFIG))"
+	@echo "eval           run FinanceBench eval, write timestamped JSON to eval_results/"
+	@echo "demo           launch Streamlit demo"
+	@echo "test           run pytest"
+	@echo "check-numbers  verify every README number matches its committed artifact"
+	@echo "lint           ruff check"
 
 install:
 	python -m pip install -e ".[dev,demo]"
@@ -36,6 +37,11 @@ demo:
 
 test:
 	pytest
+
+# Fail if any README number drifted from the eval_results/*.json that produced it,
+# or if a new claim-shaped number was added without registering it. No secrets.
+check-numbers:
+	python -m sec_rag.eval.check_numbers --strict
 
 lint:
 	ruff check src tests

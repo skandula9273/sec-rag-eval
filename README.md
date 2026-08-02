@@ -13,7 +13,7 @@
   <a href="https://sec-rag-web-200217758117.us-east1.run.app"><img src="https://img.shields.io/badge/demo-live-brightgreen?style=flat-square&logo=googlecloud&logoColor=white" alt="Live demo"/></a>
   <a href="https://github.com/skandula9273/sec-rag-eval/actions/workflows/tests.yml"><img src="https://github.com/skandula9273/sec-rag-eval/actions/workflows/tests.yml/badge.svg" alt="tests"/></a>
   <a href="https://github.com/skandula9273/sec-rag-eval/actions/workflows/eval-ci.yml"><img src="https://github.com/skandula9273/sec-rag-eval/actions/workflows/eval-ci.yml/badge.svg" alt="eval-ci"/></a>
-  <img src="https://img.shields.io/badge/tests-118%20passing-brightgreen?style=flat-square" alt="118 tests passing"/>
+  <img src="https://img.shields.io/badge/tests-133%20passing-brightgreen?style=flat-square" alt="133 tests passing"/>
   <img src="https://img.shields.io/badge/python-3.11-blue?style=flat-square&logo=python&logoColor=white" alt="Python 3.11"/>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-yellow?style=flat-square" alt="MIT license"/></a>
   <a href="https://github.com/astral-sh/ruff"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json&style=flat-square" alt="Ruff"/></a>
@@ -324,7 +324,7 @@ Honest scope, measured on a pristine `git archive` of `HEAD` (**no `.env`, no `d
 committed embeddings**):
 
 - ✅ **Reproduces from a clean clone, offline, no secrets — the test suite.** After
-  `pip install -e ".[dev]"`, `pytest` runs all **118 tests** (104 functions) with no
+  `pip install -e ".[dev]"`, `pytest` runs all **133 tests** (113 functions) with no
   network, no API keys, and no database — pure logic: chunking, metrics, the matchers,
   pricing, API schemas, auth, the eval fail-fast classifier. *This* is the one-command
   guarantee, and it's what the `tests` badge above runs on every PR.

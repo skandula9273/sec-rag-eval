@@ -25,3 +25,7 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Run test suite (no network, no secrets)
         run: pytest -q
+      - name: Check README numbers vs committed artifacts (no secrets)
+        # Fails the PR if a README number drifted from its eval_results/*.json,
+        # or a new number was added without registering it in configs/claims.yaml.
+        run: python -m sec_rag.eval.check_numbers --strict
