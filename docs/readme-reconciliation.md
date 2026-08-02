@@ -119,9 +119,13 @@ find a number that fits":
   `metric_validity_scores_20260801T211535Z.json` (overlap κ 0.1835) and
   `metric_validity_labels.jsonl` (50 hand labels, annotator "human (owner)", 0.68
   yes-rate) are committed, so the corrected claim rests on committed data.
-- ⚠️ **STILL OPEN — `docs/metric-validity.md` and `docs/metric-validity-study.md`** have
-  **uncommitted working-tree edits** (pre-existing, not made here). Verify they say
-  "second," not "third," before committing them.
+- ✅ **RESOLVED — `docs/metric-validity.md` and `docs/metric-validity-study.md`
+  reconciled.** Every number in both was verified against the artifacts (κ table,
+  human-vs-Haiku κ 0.374 / 33-50 agreement / 16-of-17 direction, 8-of-10 unanimous-no,
+  matcher recall table incl. semantic recall@10 0.873, the confound figures — all
+  MATCH). The one defect — overlap ranked **"third"** in 3 places — was corrected to
+  **"second"** (strict 0.211 > overlap 0.184 > semantic 0.081), matching each doc's own
+  κ table.
 
 ## Still unbacked (accepted as-is, flagged)
 
