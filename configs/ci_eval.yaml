@@ -6,8 +6,12 @@
 
 subset_file: eval_results/ci_subset.jsonl   # fixed 30 q (seed 13, 10/category), committed
 retrieval_config: configs/v2.yaml           # the production retrieval config under test
-matcher: overlap        # the S4 human-validated matcher (Cohen's kappa 0.67 vs labels;
-                        # docs/metric-validity.md). NOT strict/semantic — overlap agreed best.
+matcher: overlap        # kept for CONTINUITY + regression detection, NOT because it is
+                        # the human-validated best. The LLM-proxy label study ranked it
+                        # #1 (Cohen's kappa 0.67); hand-labeling the same 50 pairs
+                        # (docs/metric-validity-study.md) dropped it to kappa 0.18 — 2nd
+                        # of 3, none beating chance at n=50. The gate flags a DROP vs a
+                        # frozen baseline, which holds regardless of the matcher.
 metric: recall@5
 top_k: 10
 max_questions: 30       # cost ceiling: CI never evaluates more than this many questions

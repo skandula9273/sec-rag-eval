@@ -67,7 +67,8 @@ than I first claimed."*
 - 🚦 **Eval runs in CI** — every PR scores a committed 30-question subset against a
   frozen recall baseline and posts a delta table.
 - 🌐 **Actually deployed** — live on Cloud Run, streaming, section-cited, BYOK,
-  rate-limited. Server **p50 2.1 s / p95 6.2 s**, **~$0.0045/query** (measured).
+  rate-limited. **Warm** server **p50 2.1 s / p95 6.2 s**, **~$0.0045/query** (measured,
+  `api_latency_20260731T004411Z.json`).
 
 ---
 
@@ -82,9 +83,12 @@ pulls multiple filings. Leave the ticker blank to query the pre-indexed FinanceB
 sample corpus. Optional **BYOK** (⚙) runs it on your own OpenAI + Anthropic keys.
 
 > _No keys needed — the demo runs on the owner's rate-limited keys. **Latency:** the
-> first request after idle wakes the service (~13 s cold start); warm queries are ~2 s
-> (indexed corpus) / ~6 s (a new EDGAR filing, then cached). **Last verified live:
-> 2026-07-31** — `/health` ok, keyless query ok._
+> first visit after full idle wakes the web host — a **~13 s Cloud Run scale-to-zero cold
+> start** (observed; **distinct** from the API's *warm* server p50 ~2 s in the latency
+> benchmark, and from that benchmark's 1.9 s first-request-in-batch, which hits an
+> already-running container). Warm queries are ~2 s (indexed corpus) / ~6 s (a new EDGAR
+> filing, then cached) — both observed. **Last verified live: 2026-07-31** — `/health`
+> ok, keyless query ok._
 
 <div align="center">
 <img src="assets/byok.png" width="480" alt="Bring-your-own-key settings — run the demo on your own OpenAI + Anthropic keys"/>
@@ -104,7 +108,15 @@ metric is fuzzy(0.5); every run's JSON is committed under [`eval_results/`](eval
 | recall@10 (fuzzy) | 0.54 | **0.74** | — |
 | tables@5 (fuzzy) | 0.32 | **0.70** | — |
 | faithfulness | 0.94 | **0.93** | 0.80 ✅ |
-| cost / query | $0.0063 | ~$0.010–0.017 (top_k=20) | <$0.005 |
+| cost / query | $0.0063 | ~$0.017 (top_k=20) | <$0.005 |
+
+> <sub>**Provenance (the V2 column mixes runs by what each measures).** V0 is one run
+> (`financebench_20260605T020304Z.json`). V2: **recall / tables** from the retrieval-only
+> v2 baseline (`financebench_20260629T160938Z.json`); **faithfulness 0.93** from the
+> full-pipeline runs (**0.929** verbose `…20260629T193049Z`, **0.934** concise
+> `…20260731T025337Z`) — *not* from the accuracy run, which runs the judge **off**;
+> **cost $0.017** at the deployed top_k=20 (`…20260731T115740Z`, $0.0166/q). The live API
+> (top_k=5, judge off) is cheaper still at **$0.0045/q**.</sub>
 
 **Read recall@5 as a bracket, not a point.** The *same* V2 retrieval reads very
 differently depending on how a "hit" is scored:
@@ -115,6 +127,11 @@ strict substring        fuzzy(0.5) ← shipped         semantic
  (gold span must         (≥50% of gold tokens         (embedding
   survive verbatim)       appear in a chunk)           similarity)
 ```
+
+> **Bracket source:** `matcher_study_baseline_20260731T123250Z.json` — the live v2 config
+> (Neon corpus) scored under all three matchers over the *same* retrieval (0.0933 / 0.64 /
+> 0.8067). This is a **different run** from the confound grid, whose local-exact-index
+> 3-large/1024 row reads **0.0933 / 0.6467 / 0.8133** (`confound_grid_20260731T162218Z.json`).
 
 <details>
 <summary><strong>Why recall is a bracket — and where the honest number sits</strong></summary>
@@ -193,10 +210,16 @@ over-claiming and published the correction.**
 recall is an evidence-hit rate, and that rate is mostly a property of the **matcher**, not
 the retriever. So a 50-pair study asked: *which matcher does a human actually agree with?*
 
-- An early pass used a **Claude (Haiku) proxy labeler** and reported the shipped fuzzy
-  matcher "best-adjudicated" at **κ 0.67**.
-- **Hand-labeling the same 50 pairs** dropped it to **κ 0.18 ("slight"), third of three,
-  with no matcher beating chance at n=50.**
+- An early pass used a **Claude (Haiku) proxy labeler** and ranked the shipped fuzzy
+  (overlap) matcher **best of three at κ 0.67** (`metric_validity_scores_20260731T140147Z.json`).
+- **Hand-labeling the same 50 pairs** dropped it to **κ 0.18 ("slight") — second of
+  three** (behind strict κ 0.21; semantic κ 0.08), **with no matcher beating chance at
+  n=50** (every κ's 95% CI includes 0). Source: `metric_validity_scores_20260801T211535Z.json`.
+
+> **Read these κ's as agreement on *contested* pairs, not a population rate.** The 50
+> pairs are **disagreement-oversampled** (drawn where the matchers disagree), per the
+> artifact's own `sample_note` — so they stress the matchers, they don't estimate a
+> corpus-wide agreement rate.
 
 The clean validation was an **artifact of the LLM labeler.** This repo shipped it once,
 then caught it — and the CI gate now keeps the fuzzy matcher for *continuity and
