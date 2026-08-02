@@ -6,7 +6,7 @@
 <em>The measurement rigor is the product — the chatbot is just the subject under test.</em></p>
 
 <a href="https://sec-rag-web-200217758117.us-east1.run.app">
-  <img src="assets/hero.png" width="820" alt="SEC-RAG-Eval — ask any US public company about its latest 10-K / 10-Q / 8-K, streamed with section-level citations"/>
+  <img src="assets/hero.png?v=2" width="820" alt="SEC-RAG-Eval — ask any US public company about its latest 10-K / 10-Q / 8-K, streamed with section-level citations"/>
 </a>
 
 <p>
